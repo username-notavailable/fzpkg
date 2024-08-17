@@ -6,6 +6,8 @@ namespace Fuzzy\Fzpkg\Console\Commands;
 
 use Illuminate\Console\Command;
 use Illuminate\Filesystem\Filesystem;
+use Symfony\Component\Process\Process;
+use RuntimeException;
 
 final class InstallCommand extends Command
 {
@@ -61,6 +63,9 @@ final class InstallCommand extends Command
         if ($fileSystem->exists($laravelBootstrapJsPath)) {
             $fileSystem->append($laravelBootstrapJsPath, "
 
+import * as bootstrap from 'bootstrap';
+window.bootstrap = bootstrap;
+
 import.meta.glob([
     '../assets/**',
 ]);
@@ -86,31 +91,39 @@ window.utils = utils;
 
         /* --- */
 
+        $this->updateNodePackages(function ($packages) {
+            return [
+                'bootstrap' => '^5.3.3',
+            ] + $packages;
+        }, false);
+
+        $this->updateNodePackages(function ($packages) {
+            return [
+                'sass' => '^1.77.8'
+            ] + $packages;
+        }, true);
+
+        $this->runCommands(['npm install --include=dev', 'npm run build']);
+
+        /* --- */
+
         $data = $fileSystem->get($envFilePath);
 
-        if (mb_stripos($data, 'APP_LOCALE=en') !== false) {
-            $data = preg_replace('@APP_LOCALE=en@', 'APP_LOCALE=it_IT', $data);
+        $targets = [
+            'APP_LOCALE=en' => 'APP_LOCALE=it_IT',
+            'APP_FAKER_LOCALE=en_US' => 'APP_FAKER_LOCALE=it_IT',
+            'APP_URL=http://localhost' => 'APP_URL=http://localhost:8000'
+        ];
 
-            if (!is_null($data)) {
-                $fileSystem->put($envFilePath, $data);
+        foreach ($targets as $from => $to) {
+            if (mb_stripos($data, $from) !== false) {
+                $data = preg_replace('@' . $from . '@', $to, $data);
+    
+                if (!is_null($data)) {
+                    $fileSystem->put($envFilePath, $data);
+                }
             }
         }
-
-        if (mb_stripos($data, 'APP_FAKER_LOCALE=en_US') !== false) {
-            $data = preg_replace('@APP_FAKER_LOCALE=en_US@', 'APP_FAKER_LOCALE=it_IT', $data);
-
-            if (!is_null($data)) {
-                $fileSystem->put($envFilePath, $data);
-            }
-        }
-
-        /*if (mb_stripos($data, 'MAIL_MAILER=log') !== false) {
-            $data = preg_replace('@MAIL_MAILER=log@', 'MAIL_MAILER=smtp # Per mailpit', $data);
-
-            if (!is_null($data)) {
-                $fileSystem->put($envFilePath, $data);
-            }
-        }*/
 
         /* --- */
 
@@ -124,5 +137,62 @@ window.utils = utils;
         else {
             $fileSystem->append($envFilePath, PHP_EOL . 'FZUTILS_INSTALLED=true');
         }
+    }
+
+    /**
+     * https://github.com/laravel/breeze/blob/2.x/src/Console/InstallCommand.php
+     * 
+     * Update the "package.json" file.
+     *
+     * @param  callable  $callback
+     * @param  bool  $dev
+     * @return void
+     */
+    protected static function updateNodePackages(callable $callback, $dev = true)
+    {
+        if (! file_exists(base_path('package.json'))) {
+            return;
+        }
+
+        $configurationKey = $dev ? 'devDependencies' : 'dependencies';
+
+        $packages = json_decode(file_get_contents(base_path('package.json')), true);
+
+        $packages[$configurationKey] = $callback(
+            array_key_exists($configurationKey, $packages) ? $packages[$configurationKey] : [],
+            $configurationKey
+        );
+
+        ksort($packages[$configurationKey]);
+
+        file_put_contents(
+            base_path('package.json'),
+            json_encode($packages, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT).PHP_EOL
+        );
+    }
+
+    /**
+     * https://github.com/laravel/breeze/blob/2.x/src/Console/InstallCommand.php
+     * 
+     * Run the given commands.
+     *
+     * @param  array  $commands
+     * @return void
+     */
+    protected function runCommands($commands)
+    {
+        $process = Process::fromShellCommandline(implode(' && ', $commands), null, null, null, null);
+
+        if ('\\' !== DIRECTORY_SEPARATOR && file_exists('/dev/tty') && is_readable('/dev/tty')) {
+            try {
+                $process->setTty(true);
+            } catch (RuntimeException $e) {
+                $this->output->writeln('  <bg=yellow;fg=black> WARN </> '.$e->getMessage().PHP_EOL);
+            }
+        }
+
+        $process->run(function ($type, $line) {
+            $this->output->write('    '.$line);
+        });
     }
 }
