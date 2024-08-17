@@ -1,0 +1,30 @@
+{
+    "name": "fuzzy/fzpkg",
+    "description": "File di utilità",
+    "type": "utils",
+    "require": {
+        "php": "^8.2",
+        "illuminate/support": "*"
+    },
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "Fuzzy\\Fzpkg\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "fuzzy",
+            "email": "viviani.demetrio82@gmail.com"
+        }
+    ],
+    "minimum-stability": "dev",
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Fuzzy\\Fzpkg\\Providers\\PackageServiceProvider"
+            ],
+            "dont-discover": []
+        }
+    }
+}
