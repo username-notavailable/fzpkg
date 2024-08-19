@@ -112,7 +112,7 @@ window.utils = utils;
         $targets = [
             'APP_LOCALE=en' => 'APP_LOCALE=it_IT',
             'APP_FAKER_LOCALE=en_US' => 'APP_FAKER_LOCALE=it_IT',
-            'APP_URL=http://localhost' => 'APP_URL=http://localhost:8000'
+            'APP_URL=http://localhost.*$' => 'APP_URL=http://localhost:8000'
         ];
 
         foreach ($targets as $from => $to) {
@@ -127,15 +127,51 @@ window.utils = utils;
 
         /* --- */
 
-        if (mb_stripos($data, 'FZUTILS_INSTALLED=') !== false) {
-            $data = preg_replace('@FZUTILS_INSTALLED=.*$@', 'FZUTILS_INSTALLED=true', $data);
+        $targets = [
+            'FZ_LOG_LOGIN_SUCCESS_REQUEST=' => [
+                'from' => 'FZ_LOG_LOGIN_SUCCESS_REQUEST=.*$',
+                'to' => 'FZ_LOG_LOGIN_SUCCESS_REQUEST=false'
+            ],
+            'FZ_LOG_LOGIN_SUCCESS_LEVEL=' => [
+                'from' => 'FZ_LOG_LOGIN_SUCCESS_LEVEL=.*$',
+                'to' => 'FZ_LOG_LOGIN_SUCCESS_LEVEL=debug'
+            ],
+            'FZ_LOG_LOGIN_FAIL_REQUEST=' => [
+                'from' => 'FZ_LOG_LOGIN_FAIL_REQUEST=.*$',
+                'to' => 'FZ_LOG_LOGIN_FAIL_REQUEST=false'
+            ],
+            'FZ_LOG_LOGIN_FAIL_LEVEL=' => [
+                'from' => 'FZ_LOG_LOGIN_FAIL_LEVEL=.*$',
+                'to' => 'FZ_LOG_LOGIN_FAIL_LEVEL=debug'
+            ],
+            'FZ_LOG_LOGIN_LOCKOUT_REQUEST=' => [
+                'from' => 'FZ_LOG_LOGIN_LOCKOUT_REQUEST=.*$',
+                'to' => 'FZ_LOG_LOGIN_LOCKOUT_REQUEST=false'
+            ],
+            'FZ_LOG_LOGIN_LOCKOUT_LEVEL=' => [
+                'from' => 'FZ_LOG_LOGIN_LOCKOUT_LEVEL=.*$',
+                'to' => 'FZ_LOG_LOGIN_LOCKOUT_LEVEL=debug'
+            ],
+            'FZUTILS_INSTALLED=' => [
+                'from' => 'FZUTILS_INSTALLED=.*$',
+                'to' => 'FZUTILS_INSTALLED=true'
+            ],
+        ];
 
-            if (!is_null($data)) {
+        $data .= PHP_EOL;
+
+        foreach ($targets as $search => $fromTo) {
+            if (mb_stripos($data, $search) !== false) {
+                $data = preg_replace('@' . $fromTo['from'] . '@', $fromTo['to'], $data);
+    
+                if (!is_null($data)) {
+                    $fileSystem->put($envFilePath, $data);
+                }
+            }
+            else {
+                $data .= (PHP_EOL . $fromTo['to']);
                 $fileSystem->put($envFilePath, $data);
             }
-        }
-        else {
-            $fileSystem->append($envFilePath, PHP_EOL . 'FZUTILS_INSTALLED=true');
         }
     }
 
