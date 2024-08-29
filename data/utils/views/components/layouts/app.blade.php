@@ -6,6 +6,9 @@
 
         <title>{{ config('app.name') }} {{ empty($title) ? '' : " | $title" }}</title>
 
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+
         @production
             @php
                 $manifest = json_decode(file_get_contents(public_path('build/manifest.json')), true);
@@ -53,10 +56,12 @@
                     utils.showToast(event[0].type, event[0].message);
                 });
 
-                @if (session()->has('toastType')) 
+                @if (session()->has('toastType') && session()->has('toastMessage')) 
                     utils.showToast('{{ session()->get('toastType') }}', '{{ session()->get('toastMessage')}}');
                 @endif
             });
         </script>
+
+        {{ $pagejs ?? '' }}
     </body>
 </html>

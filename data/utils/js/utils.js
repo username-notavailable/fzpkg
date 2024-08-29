@@ -54,10 +54,12 @@ function unsetSavedScrollTop() {
     }
 }
 
-function showDeleteModalConfirm(targetComponent, itemId, collectionId, message) {
-    document.querySelector('#deleteModal .btn-danger').setAttribute('onclick', 'Livewire.dispatchTo(\'' + targetComponent + '\', \'delete-confirmed\', { id: \'' + itemId + '\', collection_id: ' + collectionId + ' });');
-    document.querySelector('#deleteModal .modal-body').innerHTML = message;
-    bootstrap.Modal.getOrCreateInstance(document.getElementById('deleteModal')).show();
+const livewire = {
+    showDeleteModalConfirm: function (targetComponent, itemId, collectionId, message) {
+        document.querySelector('#deleteModal .btn-danger').setAttribute('onclick', 'Livewire.dispatchTo(\'' + targetComponent + '\', \'delete-confirmed\', { id: \'' + itemId + '\', collection_id: ' + collectionId + ' });');
+        document.querySelector('#deleteModal .modal-body').innerHTML = message;
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('deleteModal')).show();
+    }
 }
 
-export default { showToast, saveScrollTop, unsetSavedScrollTop, showDeleteModalConfirm };
+export default { showToast, saveScrollTop, unsetSavedScrollTop, livewire };

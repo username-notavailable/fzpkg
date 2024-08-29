@@ -1,0 +1,115 @@
+<?php
+
+namespace App\Livewire\Forms;
+
+use App\Models\{{ model_name }};
+use Livewire\Form;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
+//use Livewire\Attributes\Validate;
+//use Illuminate\Support\Str;
+//use Illuminate\Validation\Rule;
+//use Illuminate\Validation\Rules\File;
+
+class {{ form_name }} extends Form
+{
+    // Model
+    public {{ model_name }} ${{ model_name_lowercase }};
+
+    // Attributes
+    {{ attributes }}
+
+    public function setModel({{ model_name }} ${{ model_name_lowercase }})
+    {
+        $this->{{ model_name_lowercase }} = ${{ model_name_lowercase }};
+
+        {{ attributes_init }}
+    }
+
+    public function rules()
+    {
+        return [
+            {{ attributes_rules_init }}
+        ];
+    }
+
+    public function validate($rules = null, $messages = [], $attributes = [])
+    {
+        parent::validate($rules, $messages, $attributes);
+    }
+
+    /*public function prepareForValidation($attributes) {
+        //if (isset($attributes['email'])) {
+        //    $attributes['email'] = strtolower($attributes['email']);
+        //}
+        //if ($attributes['id'] !== '' && !($attributes['image'] instanceof \Livewire\Features\SupportFileUploads\TemporaryUploadedFile)) {
+        //    $attributes['image'] = '';
+        //}
+
+        return $attributes;
+    }*/
+
+    public function storeModel(array $validated = [], array $options = []) : bool
+    {
+        try {
+            $done = true;
+
+            if (empty($validated)) {
+                $this->validate();
+            }
+
+            if (empty($validated)) {
+                {{ model_name }}::create($this->only($this->{{ model_name_lowercase }}->getFillable()));
+            }
+            else {
+                $this->{{ model_name_lowercase }}->unguard(true);
+                $this->{{ model_name_lowercase }}->fill($validated);
+                $this->{{ model_name_lowercase }}->unguard(false);
+
+                $done = $this->{{ model_name_lowercase }}->save($options);
+            }
+            
+            //$this->resetExcept('{{ model_name_lowercase }}');
+
+            return $done;
+        }
+        catch (\Throwable $e) {
+            if (!($e instanceof ValidationException)) {
+                Log::error($e->getMessage());
+            }
+
+            throw $e;
+        }
+    }
+
+    public function updateModel(array $validated = [], array $options = []) : bool
+    {
+        try {
+            $done = true;
+
+            if (empty($validated)) {
+                $this->validate();
+            }
+
+            if (empty($validated)) {
+                return $this->{{ model_name_lowercase }}->update($this->only($this->{{ model_name_lowercase }}->getFillable()), $options);
+            }
+            else {
+                $this->{{ model_name_lowercase }}->unguard(true);
+                $done = $this->{{ model_name_lowercase }}->update($validated, $options);
+                $this->{{ model_name_lowercase }}->unguard(false);
+            }
+ 
+            //$this->resetExcept('{{ model_name_lowercase }}');
+
+            return $done;
+        }
+        catch (\Throwable $e) {
+            if (!($e instanceof ValidationException)) {
+                Log::error($e->getMessage());
+            }
+
+            throw $e;
+        }
+    }
+}

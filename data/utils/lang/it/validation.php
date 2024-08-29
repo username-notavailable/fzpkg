@@ -1,18 +1,18 @@
 <?php
 
-return [
+/*
+|--------------------------------------------------------------------------
+| Validation Language Lines
+|--------------------------------------------------------------------------
+|
+| Le seguenti righe contengono i messaggi di errore predefiniti utilizzati
+| dalla classe di validazione. Alcune di queste regole hanno più versioni,
+| come le regole di dimensione. Sentiti libero di modificare ciascuno di
+| questi messaggi qui.
+|
+*/
 
-    /*
-    |--------------------------------------------------------------------------
-    | Validation Language Lines
-    |--------------------------------------------------------------------------
-    |
-    | Le seguenti righe contengono i messaggi di errore predefiniti utilizzati
-    | dalla classe di validazione. Alcune di queste regole hanno più versioni,
-    | come le regole di dimensione. Sentiti libero di modificare ciascuno di
-    | questi messaggi qui.
-    |
-    */
+return [
 
     'accepted' => 'Il campo :attribute deve essere accettato.',
     'accepted_if' => 'Il campo :attribute deve essere accettato quando :other è :value.',
