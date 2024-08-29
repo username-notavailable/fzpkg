@@ -6,7 +6,7 @@ namespace Fuzzy\Fzpkg\Console\Commands;
 
 use Illuminate\Filesystem\Filesystem;
 
-final class InstallUtilsCommand extends BaseCommand
+final class InstallLanguagesCommand extends BaseCommand
 {
     protected $signature = 'fz:install:langs';
 
