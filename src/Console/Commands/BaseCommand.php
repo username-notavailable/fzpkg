@@ -7,9 +7,79 @@ namespace Fuzzy\Fzpkg\Console\Commands;
 use Illuminate\Console\Command;
 use Symfony\Component\Process\Process;
 use RuntimeException;
+use Illuminate\Filesystem\Filesystem;
 
 class BaseCommand extends Command
 {
+    protected function checkEnvFlag(string $flagName, string $errorMessage) 
+    {
+        $fileSystem = new Filesystem();
+
+        $envFilePath = base_path('.env');
+
+        if ($fileSystem->exists($envFilePath)) {
+            $data = $fileSystem->get($envFilePath);
+
+            if (mb_stripos($data, $flagName) !== false) {
+                $alreadyInstalled = env($flagName);
+
+                if (is_bool($alreadyInstalled)) {
+                    if ($alreadyInstalled) {
+                        $this->fail($errorMessage);
+                    }
+                }
+                else {
+                    $this->fail($flagName . ' into .env must be boolean');
+                }
+            }
+        }
+        else {
+            $this->fail('.env file not found');
+        }
+    }
+
+    protected function updateEnvFile(array $targets)
+    {
+        $fileSystem = new Filesystem();
+
+        $envFilePath = base_path('.env');
+
+        $data = $fileSystem->get($envFilePath);
+
+        foreach ($targets as $search => $fromTo) {
+            if (mb_stripos($data, $search) !== false) {
+                $data = preg_replace('@' . $fromTo['from'] . '@m', $fromTo['to'], $data);
+
+                if (!is_null($data)) {
+                    $fileSystem->put($envFilePath, $data);
+                }
+            }
+        }
+    }
+
+    protected function updateEnvFileOrAppend(array $targets)
+    {
+        $fileSystem = new Filesystem();
+
+        $envFilePath = base_path('.env');
+
+        $data = $fileSystem->get($envFilePath);
+
+        foreach ($targets as $search => $fromTo) {
+            if (mb_stripos($data, $search) !== false) {
+                $data = preg_replace('@' . $fromTo['from'] . '@m', $fromTo['to'], $data);
+    
+                if (!is_null($data)) {
+                    $fileSystem->put($envFilePath, $data);
+                }
+            }
+            else {
+                $data .= (PHP_EOL . $fromTo['to']);
+                $fileSystem->put($envFilePath, $data);
+            }
+        }
+    }
+
     /**
      * https://github.com/laravel/breeze/blob/2.x/src/Console/InstallCommand.php
      * 

@@ -16,32 +16,8 @@ final class InstallUtilsCommand extends BaseCommand
     {
         $fileSystem = new Filesystem();
 
-        $envFilePath = base_path('.env');
+        $this->checkEnvFlag('FZ_UTILS_INSTALLED', 'Fz utils already installed');
 
-        if ($fileSystem->exists($envFilePath)) {
-            $data = $fileSystem->get($envFilePath);
-
-            if (mb_stripos($data, 'FZ_UTILS_INSTALLED') !== false) {
-                $fzUtilsAlreadyInstalled = env('FZUTILS_INSTALLED');
-
-                if (is_bool($fzUtilsAlreadyInstalled)) {
-                    if ($fzUtilsAlreadyInstalled) {
-                        $this->fail('Fz utils already installed');
-                    }
-                }
-                else {
-                    $this->fail('FZ_UTILS_INSTALLED into .env must be boolean');
-                }
-            }
-        }
-        else {
-            $this->fail('.env file not found');
-        }
-
-        //$fileSystem->ensureDirectoryExists(resource_path('views/components/layouts'));
-        //$fileSystem->copyDirectory(__DIR__.'/../../../data/utils/views', resource_path('views'));
-
-        //$fileSystem->ensureDirectoryExists(resource_path('css'));
         $fileSystem->copyDirectory(__DIR__.'/../../../data/utils/favicons', public_path());
 
         $fileSystem->ensureDirectoryExists(resource_path('js'));
@@ -56,7 +32,7 @@ final class InstallUtilsCommand extends BaseCommand
 
         if ($fileSystem->exists($laravelBootstrapJsPath)) {
             $fileSystem->append($laravelBootstrapJsPath, "
-
+            
 import * as bootstrap from 'bootstrap';
 window.bootstrap = bootstrap;
 
@@ -101,23 +77,22 @@ window.utils = utils;
 
         /* --- */
 
-        $data = $fileSystem->get($envFilePath);
-
         $targets = [
-            'APP_LOCALE=.*$' => 'APP_LOCALE=it',
-            'APP_FAKER_LOCALE=.*$' => 'APP_FAKER_LOCALE=it_IT',
-            'APP_URL=.*$' => 'APP_URL=http://localhost:8000'
+            'APP_LOCALE=' => [
+                'from' => 'APP_LOCALE=.*$',
+                'to' => 'APP_LOCALE=it'
+            ],
+            'APP_FAKER_LOCALE=' => [
+                'from' => 'APP_FAKER_LOCALE=.*$',
+                'to' => 'APP_FAKER_LOCALE=it_IT'
+            ],
+            'APP_URL=' => [
+                'from' => 'APP_URL=.*$',
+                'to' => 'APP_URL=http://localhost:8000'
+            ]
         ];
 
-        foreach ($targets as $from => $to) {
-            if (mb_stripos($data, $from) !== false) {
-                $data = preg_replace('@' . $from . '@', $to, $data);
-    
-                if (!is_null($data)) {
-                    $fileSystem->put($envFilePath, $data);
-                }
-            }
-        }
+        $this->updateEnvFile($targets);
 
         /* --- */
 
@@ -128,20 +103,6 @@ window.utils = utils;
             ],
         ];
 
-        $data .= PHP_EOL;
-
-        foreach ($targets as $search => $fromTo) {
-            if (mb_stripos($data, $search) !== false) {
-                $data = preg_replace('@' . $fromTo['from'] . '@', $fromTo['to'], $data);
-    
-                if (!is_null($data)) {
-                    $fileSystem->put($envFilePath, $data);
-                }
-            }
-            else {
-                $data .= (PHP_EOL . $fromTo['to']);
-                $fileSystem->put($envFilePath, $data);
-            }
-        }
+        $this->updateEnvFileOrAppend($targets);
     }
 }

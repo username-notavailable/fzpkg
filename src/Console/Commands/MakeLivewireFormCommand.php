@@ -4,7 +4,7 @@ namespace Fuzzy\Fzpkg\Console\Commands;
 
 use Illuminate\Console\GeneratorCommand;
 
-class MakeLivewireForm extends GeneratorCommand
+class MakeLivewireFormCommand extends GeneratorCommand
 {
     /**
      * The name and signature of the console command.
@@ -18,7 +18,7 @@ class MakeLivewireForm extends GeneratorCommand
      *
      * @var string
      */
-    protected $description = 'Create a new Livewire model form: $fillable and $attributes must be defined into the model.';
+    protected $description = 'Create a new Livewire model form: $fillable and $attributes must be defined into the model';
 
     protected $type = 'Form';
 

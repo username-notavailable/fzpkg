@@ -16,7 +16,20 @@ final class InstallStubsCommand extends BaseCommand
     {
         $fileSystem = new Filesystem();
 
+        $this->checkEnvFlag('FZ_STUBS_INSTALLED', 'Fz stubs already installed');
+
         $fileSystem->ensureDirectoryExists(base_path('stubs'));
         $fileSystem->copyDirectory(__DIR__.'/../../../data/stubs', base_path('stubs'));
+
+        /* --- */
+
+        $targets = [
+            'FZ_STUBS_INSTALLED=' => [
+                'from' => 'FZ_STUBS_INSTALLED=.*$',
+                'to' => 'FZ_STUBS_INSTALLED=true'
+            ],
+        ];
+
+        $this->updateEnvFileOrAppend($targets);
     }
 }

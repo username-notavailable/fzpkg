@@ -4,7 +4,8 @@
     "type": "utils",
     "require": {
         "php": "^8.2",
-        "illuminate/support": "*"
+        "illuminate/support": "*",
+        "guzzlehttp/guzzle": "^7.9"
     },
     "license": "MIT",
     "autoload": {

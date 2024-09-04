@@ -21,7 +21,7 @@
 
         <livewire:styles />
     </head>
-    <body style="padding-top:80px;background-color:transparent;">
+    <body>
         {{ $slot }}
 
         <div id="toastContainer" class="toast-container position-fixed bottom-0 end-0 p-3"></div>
@@ -57,11 +57,9 @@
                 });
 
                 @if (session()->has('toastType') && session()->has('toastMessage')) 
-                    utils.showToast('{{ session()->get('toastType') }}', '{{ session()->get('toastMessage')}}');
+                    utils.showToast('{{ session()->get("toastType") }}', '{{ session()->get("toastMessage") }}');
                 @endif
             });
         </script>
-
-        {{ $pagejs ?? '' }}
     </body>
 </html>

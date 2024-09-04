@@ -5,10 +5,15 @@ declare(strict_types=1);
 namespace Fuzzy\Fzpkg\Providers;
 
 use Illuminate\Support\ServiceProvider;
-use Fuzzy\Fzpkg\Console\Commands\InstallUtilsCommand;
+
 use Fuzzy\Fzpkg\Console\Commands\InstallEventsCommand;
+use Fuzzy\Fzpkg\Console\Commands\InstallLanguagesCommand;
+use Fuzzy\Fzpkg\Console\Commands\InstallLivewireLayoutsCommand;
+use Fuzzy\Fzpkg\Console\Commands\InstallScrapersCommand;
 use Fuzzy\Fzpkg\Console\Commands\InstallStubsCommand;
-use Fuzzy\Fzpkg\Console\Commands\MakeLivewireForm;
+use Fuzzy\Fzpkg\Console\Commands\InstallUtilsCommand;
+use Fuzzy\Fzpkg\Console\Commands\MakeLivewireFormCommand;
+use Fuzzy\Fzpkg\Console\Commands\RunScrapersCommand;
 
 final class PackageServiceProvider extends ServiceProvider
 {
@@ -21,10 +26,14 @@ final class PackageServiceProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands(
                 commands: [
-                    InstallUtilsCommand::class,
                     InstallEventsCommand::class,
+                    InstallLanguagesCommand::class,
+                    InstallLivewireLayoutsCommand::class,
+                    InstallScrapersCommand::class,
                     InstallStubsCommand::class,
-                    MakeLivewireForm::class
+                    InstallUtilsCommand::class,
+                    MakeLivewireFormCommand::class,
+                    RunScrapersCommand::class
                 ],
             );
         }
