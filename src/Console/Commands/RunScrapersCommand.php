@@ -62,7 +62,7 @@ final class RunScrapersCommand extends BaseCommand
                                 }
                                 else {
                                     if (hash('md5', $itemsStr) === hash('md5', $fileItemsStr)) {
-                                        $this->outLabelledText('info', 'File "'. basename($outputFile) . '" not updated (content unchanged)');
+                                        $this->outLabelledText('info', 'File "'. basename($outputFile) . '" not updated (' . count($instance->getItemsArray()) . ' items unchanged)');
                                     }
                                     else {
                                         $writeFile = true;
@@ -78,7 +78,7 @@ final class RunScrapersCommand extends BaseCommand
                                     $this->outLabelledText('error', 'File "'. basename($outputFile) . '" not updated (write error)');
                                 }
                                 else {
-                                    $this->outLabelledText('success', 'File "'. basename($outputFile) . '" updated');
+                                    $this->outLabelledText('success', 'File "'. basename($outputFile) . '" updated (' . count($instance->getItemsArray()) . ' items)');
                                 }
                             }
                         }

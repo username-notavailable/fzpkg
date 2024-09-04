@@ -46,7 +46,7 @@ class BaseScrape
                 $this->progressBar = $this->outputStyle->createProgressBar($total);
                 $this->progressBar->minSecondsBetweenRedraws(PHP_FLOAT_MIN);
                 $this->progressBar->maxSecondsBetweenRedraws(PHP_FLOAT_MIN);
-                $this->progressBar->setFormat('%current%/%max% [%bar%] %percent:3s%% %elapsed:10s%/%estimated:-16s% %memory:6s%');
+                $this->progressBar->setFormat('- %current%/%max% %bar% %percent:3s%% %elapsed:10s%/%estimated:-16s% %memory:6s%');
                 $this->progressBar->start($total);
             }
             
