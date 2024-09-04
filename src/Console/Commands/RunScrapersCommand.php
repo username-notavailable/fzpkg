@@ -25,7 +25,7 @@ final class RunScrapersCommand extends BaseCommand
 
         if (count($classes) > 0) {
             $this->newLine();
-            $this->outText('>>> Start scraping... <<<', true);    
+            $this->outText('info', '>>> Start scraping... <<<', true);    
 
             foreach ($classes as $class) {
                 $className = basename($class, '.php');
@@ -39,8 +39,8 @@ final class RunScrapersCommand extends BaseCommand
                     $instance->setOutput($this->output, $this->outputComponents());
 
                     foreach ($instance->getSearchItems() as $search) {
-                        $this->outText('- Current class: ' . $className);
-                        $this->outText('- Search: "' . ($search === '' ? 'ALL' : $search) . '"');
+                        $this->outText('line', '- Current class: ' . $className);
+                        $this->outText('line', '- Search: "' . ($search === '' ? 'ALL' : $search) . '"');
 
                         $instance->resetProgress();
                         $scrapeResult = $instance->doScrape($search);
@@ -92,17 +92,23 @@ final class RunScrapersCommand extends BaseCommand
                 }
             }
 
-            $this->outText('>>> Scraping terminated <<<', true);
+            $this->outText('info', '>>> Scraping terminated <<<', true);
         }
         else {
             $this->outLabelledText('warning', 'No scraping classes found');
         }
     }
 
-    protected function outText(string $message, bool $newLine = false) : void
+    protected function outText(string $type, string $message, bool $newLine = false) : void
     {
         Log::info($message, [$this->signature]);
-        $this->info($message);
+
+        if ($type === 'info') {
+            $this->line($message, 'info');
+        }
+        else {
+            $this->line($message);
+        }
 
         if ($newLine) {
             $this->newLine();
