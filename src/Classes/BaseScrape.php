@@ -2,18 +2,31 @@
 
 namespace Fuzzy\Fzpkg\Classes;
 
+use GuzzleHttp\Client;
 use Illuminate\Console\OutputStyle;
 use Illuminate\Console\View\Components\Factory;
 use Fuzzy\Fzpkg\Enums\ScrapeResult;
+use Fuzzy\Fzpkg\Classes\ScrapedItems;
+use Symfony\Component\Console\Helper\ProgressBar;
 
 class BaseScrape 
 {
-    protected array $items;
+    protected Client $httpClient;
+    protected ScrapedItems $scrapedItems;
     private OutputStyle $outputStyle;
     private Factory $outputComponents;
-    private $progressBar;
+    private ?ProgressBar $progressBar;
+    private bool $useProgressBar;
 
-    public function getSearchItems() : array
+    public function __construct(bool $useProgressBar = false)
+    {
+        $this->httpClient = new Client();
+        $this->scrapedItems = new ScrapedItems();
+        $this->progressBar = null;
+        $this->useProgressBar = $useProgressBar;
+    }
+
+    public function getSearchWords() : array
     {
         return [];
     }
@@ -23,9 +36,9 @@ class BaseScrape
         return ScrapeResult::NO_DATA;
     }
 
-    public function useProgressBar() : bool
+    public function finalize(string $outputDir, string $fileName, string $search) : void
     {
-        return true;
+        return;
     }
 
     final public function setOutput(OutputStyle $outputStyle, Factory $outputComponents) : void
@@ -40,7 +53,7 @@ class BaseScrape
         // https://symfony.com/doc/7.2/components/console/helpers/progressbar.html
         // https://www.php.net/manual/en/reserved.constants.php
 
-        if ($this->useProgressBar() || !empty($this->progressBar)) {
+        if ($this->useProgressBar) {
             if (empty($this->progressBar)) {
                 $this->outputStyle->newLine();
                 $this->progressBar = $this->outputStyle->createProgressBar($total);
@@ -72,8 +85,13 @@ class BaseScrape
         }
     }
 
-    final public function getItemsArray() : array
+    final public function getScrapedItems() : ScrapedItems
     {
-        return $this->items;
+        return $this->scrapedItems;
+    }
+
+    final public function resetScrapedItems() : void
+    {
+        $this->scrapedItems->reset();
     }
 }

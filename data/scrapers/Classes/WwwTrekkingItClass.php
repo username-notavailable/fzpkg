@@ -4,16 +4,29 @@ namespace App\Scrapers\Classes;
 
 use Fuzzy\Fzpkg\Classes\BaseScrape;
 use Fuzzy\Fzpkg\Enums\ScrapeResult;
+use Illuminate\Support\Facades\Log;
+//use App\Scrapers\Search\SharedSearchWords;
 
 class WwwTrekkingItClass extends BaseScrape
 {
+    public function __construct()
+    {
+        parent::__construct(useProgressBar: true);
+    }
+
+    public function getSearchWords() : array
+    {
+        //return SharedSearchWords::words();
+
+        return [
+            'toscana',
+            '',
+            //...
+        ];
+    }
+
     public function doScrape(string $search) : ScrapeResult
     {
-        // from BaseScrape
-        $this->items = [];
-                
-        $httpClient = new \GuzzleHttp\Client();
-
         $page = 1;
         $count = 1;
         $done = false;
@@ -21,11 +34,11 @@ class WwwTrekkingItClass extends BaseScrape
         $totArticles = '';
         $origin = 'https://www.trekking.it';
 
-        $referer = 'https://www.trekking.it/?s=' . $search;
+        $referer = 'https://www.trekking.it/?s=' . urlencode($search);
 
         do {
             if ($page == 1) {
-                $response = $httpClient->request('GET', $referer, [
+                $response = $this->httpClient->request('GET', $referer, [
                 'headers' => [
                     'ACCEPT' => '*/*',
                     'ACCEPT-ENCODING' => 'gzip, deflate, br',
@@ -36,7 +49,7 @@ class WwwTrekkingItClass extends BaseScrape
                 ]]);
             }
             else {
-                $response = $httpClient->request('POST', 'https://www.trekking.it/wp-admin/admin-ajax.php', [
+                $response = $this->httpClient->request('POST', 'https://www.trekking.it/wp-admin/admin-ajax.php', [
                 'headers' => [
                     'ACCEPT' => '*/*',
                     'ACCEPT-ENCODING' => 'gzip, deflate, br',
@@ -52,7 +65,7 @@ class WwwTrekkingItClass extends BaseScrape
                     'paged' => $page,
                     'nonce' => $nonce,
                     'type' => 'SearchPosts',
-                    'key' => (!empty($search) ? $search : '')
+                    'key' => $search
                 ]]);
             }
 
@@ -114,8 +127,8 @@ class WwwTrekkingItClass extends BaseScrape
                         $link = '';
                     }
                     else {
-                        $title = trim($_title[0]->textContent, " \n");
-                        $link = trim($_title[0]->getAttribute('href'), " \n");
+                        $title = $_title[0]->textContent;
+                        $link = $_title[0]->getAttribute('href');
                     }
 
                     if ($_tags->count() === 0) {
@@ -123,22 +136,20 @@ class WwwTrekkingItClass extends BaseScrape
                         $tagsLink = '';
                     }
                     else {
-                        $tags = trim($_tags[0]->textContent, " \n");
-                        $tagsLink = $origin . trim($_tags[0]->getAttribute('href'), " \n");
+                        $tags = $_tags[0]->textContent;
+                        $tagsLink = $origin . $_tags[0]->getAttribute('href');
                     }
 
-                    $this->items[] = [
-                        'image' => ($image->count() === 0 ? '' : trim($image[0]->getAttribute('data-src'), " \n")),
-                        'time' =>  ($time->count() === 0 ? '' : trim($time[0]->textContent, " \n")),
-                        'title' => $title,
-                        'link' => $link,
-                        'tags' => $tags,
-                        'tagsLink' => $tagsLink
-                    ];
+                    $this->scrapedItems->addItem(
+                        ($image->count() === 0 ? '' : $image[0]->getAttribute('data-src')),
+                        ($time->count() === 0 ? '' : $time[0]->textContent),
+                        $title,
+                        $link,
+                        $tags,
+                        $tagsLink
+                    );
 
                     $this->showProgress($count++, $totArticles);
-
-                    //sleep(1);
                 }
 
                 $page++;
@@ -150,16 +161,9 @@ class WwwTrekkingItClass extends BaseScrape
         return ScrapeResult::OK;
     }
 
-    public function getSearchItems() : array
+    /*public function finalize(string $outputDir, string $fileName, string $search) : void
     {
-        return [
-            'toscana',
-            ''
-        ];
-    }
-
-    public function useProgressBar() : bool
-    {
-        return true;
-    }
+        Log::info('called finalize()');
+        return;
+    }*/
 }

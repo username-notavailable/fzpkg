@@ -2,7 +2,6 @@
 
 namespace Fuzzy\Fzpkg\Console\Commands;
 
-use Fuzzy\Fzpkg\Console\Commands\BaseCommand;
 use Illuminate\Filesystem\Filesystem;
 use Fuzzy\Fzpkg\Enums\ScrapeResult;
 use Illuminate\Support\Facades\Log;
@@ -38,19 +37,25 @@ final class RunScrapersCommand extends BaseCommand
                 else {
                     $instance->setOutput($this->output, $this->outputComponents());
 
-                    foreach ($instance->getSearchItems() as $search) {
+                    foreach ($instance->getSearchWords() as $search) {
+                        $search = trim($search);
+                        
                         $this->outText('line', '- Current class: ' . $className);
-                        $this->outText('line', '- Search: "' . ($search === '' ? 'ALL' : $search) . '"');
+                        $this->outText('line', '- Search: "' . $search . '"');
 
                         $instance->resetProgress();
+                        $instance->resetScrapedItems();
+                        
                         $scrapeResult = $instance->doScrape($search);
 
                         if ($scrapeResult === ScrapeResult::OK) {
                             $this->newLine()->newLine();
+                            $fileName = $className . '__#__' . preg_replace('@ @', '_', $search) . '.json';
 
-                            $outputFile = $outputDir . DIRECTORY_SEPARATOR . $className . '__' . ($search === '' ? 'ALL' : $search) . '.json';
+                            $outputFile = $outputDir . DIRECTORY_SEPARATOR . $fileName;
 
-                            $itemsStr = json_encode($instance->getItemsArray());
+                            $itemsStr = $instance->getScrapedItems()->toJson();
+                            $itemsCount = $instance->getScrapedItems()->count();
 
                             if (file_exists($outputFile)) {
                                 $writeFile = false;
@@ -62,7 +67,7 @@ final class RunScrapersCommand extends BaseCommand
                                 }
                                 else {
                                     if (hash('md5', $itemsStr) === hash('md5', $fileItemsStr)) {
-                                        $this->outLabelledText('info', 'File "'. basename($outputFile) . '" not updated (' . count($instance->getItemsArray()) . ' items unchanged)');
+                                        $this->outLabelledText('info', 'File "'. basename($outputFile) . '" not updated (' . $itemsCount  . ' items unchanged)');
                                     }
                                     else {
                                         $writeFile = true;
@@ -78,7 +83,8 @@ final class RunScrapersCommand extends BaseCommand
                                     $this->outLabelledText('error', 'File "'. basename($outputFile) . '" not updated (write error)');
                                 }
                                 else {
-                                    $this->outLabelledText('success', 'File "'. basename($outputFile) . '" updated (' . count($instance->getItemsArray()) . ' items)');
+                                    $this->outLabelledText('success', 'File "'. basename($outputFile) . '" updated (' . $itemsCount  . ' items)');
+                                    $instance->finalize($outputDir, $fileName, $search);
                                 }
                             }
                         }
