@@ -2,18 +2,20 @@
 
 namespace Fuzzy\Fzpkg\Classes;
 
-class ScrapedItems 
+class ScrapedItems implements \Iterator
 {
     private array $scrapedItems;
+    private int $index = 0;
     
     public function __construct()
     {
         $this->scrapedItems = [];
+        $this->index = 0;
     }
 
-    final public function addItem(string $image, string $time, string $title, string $link, string $tags, string $tagsLink) : void
+    final public function addItem(string $image, string $time, string $title, string $link, string $tags) : void
     {
-        $i = [ $image, $time, $title, $link, $tags, $tagsLink ];
+        $i = [ $image, $time, $title, $link, $tags ];
     
         $items = array_map(function($item) { return trim($item, " \t\n"); }, $i);
 
@@ -25,8 +27,7 @@ class ScrapedItems
             'time' =>  $items[1],
             'title' => $items[2],
             'link' => $items[3],
-            'tags' => $items[4],
-            'tagsLink' => $items[5]
+            'tags' => $items[4]
         ];
 
         return;
@@ -50,5 +51,41 @@ class ScrapedItems
     final public function reset() : void
     {
         $this->scrapedItems = [];
+        $this->index = 0;
+    }
+
+    // Iterator
+
+    public function current() : mixed
+    {
+        return empty($this->scrapedItems) ? null : $this->scrapedItems[$this->index];
+    }
+
+    public function next() : void
+    {
+        $this->index++;
+    }
+
+    public function key() : mixed
+    {
+        return $this->index;
+    }
+
+    public function valid() : bool
+    {
+        return isset($this->scrapedItems[$this->key()]);
+    }
+
+    public function rewind() : void
+    {
+        $this->index = 0;
+    }
+
+    // ---
+
+    public function reverse()
+    {
+        $this->scrapedItems = array_reverse($this->scrapedItems, true);
+        $this->rewind();
     }
 }

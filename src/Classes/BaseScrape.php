@@ -6,8 +6,11 @@ use GuzzleHttp\Client;
 use Illuminate\Console\OutputStyle;
 use Illuminate\Console\View\Components\Factory;
 use Fuzzy\Fzpkg\Enums\ScrapeResult;
+use Fuzzy\Fzpkg\Enums\RunScraperResult;
 use Fuzzy\Fzpkg\Classes\ScrapedItems;
 use Symfony\Component\Console\Helper\ProgressBar;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
 
 class BaseScrape 
 {
@@ -17,13 +20,15 @@ class BaseScrape
     private Factory $outputComponents;
     private ?ProgressBar $progressBar;
     private bool $useProgressBar;
+    private int $sleepBetweenSearch;
 
-    public function __construct(bool $useProgressBar = false)
+    public function __construct(bool $useProgressBar = true, $sleepBetweenSearch = 0)
     {
         $this->httpClient = new Client();
         $this->scrapedItems = new ScrapedItems();
         $this->progressBar = null;
         $this->useProgressBar = $useProgressBar;
+        $this->sleepBetweenSearch = $sleepBetweenSearch;
     }
 
     public function getSearchWords() : array
@@ -36,9 +41,37 @@ class BaseScrape
         return ScrapeResult::NO_DATA;
     }
 
-    public function finalize(string $outputDir, string $fileName, string $search) : void
+    public function finalize(RunScraperResult $result, string $outputDir, string $fileName, string $className, string $search) : void
     {
+        /*if (!Schema::hasTable($className)) {
+            Schema::create($className, function (Blueprint $table) {
+                $table->id();
+                $table->string('md5')->index();
+                $table->text('search')->index();
+                $table->text('image')->nullable();
+                $table->string('time');
+                $table->text('title')->index();
+                $table->text('link')->index();
+                $table->text('tags')->index();
+                $table->timestamps();
+            });
+        }
+
+        if (in_array($result, [ RunScraperResult::FILE_CREATED, RunScraperResult::FILE_UPDATED ])) {
+            
+        }*/
+
         return;
+    }
+
+    public static function getSite() : string
+    {
+        return '';
+    }
+
+    final public function sleepBetweenSearch() : int
+    {
+        return $this->sleepBetweenSearch;
     }
 
     final public function setOutput(OutputStyle $outputStyle, Factory $outputComponents) : void

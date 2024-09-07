@@ -4,14 +4,15 @@ namespace App\Scrapers\Classes;
 
 use Fuzzy\Fzpkg\Classes\BaseScrape;
 use Fuzzy\Fzpkg\Enums\ScrapeResult;
-use Illuminate\Support\Facades\Log;
+//use Fuzzy\Fzpkg\Enums\RunScraperResult;
+//use Illuminate\Support\Facades\Log;
 //use App\Scrapers\Search\SharedSearchWords;
 
 class WwwTrekkingItClass extends BaseScrape
 {
     public function __construct()
     {
-        parent::__construct(useProgressBar: true);
+        parent::__construct();
     }
 
     public function getSearchWords() : array
@@ -119,34 +120,15 @@ class WwwTrekkingItClass extends BaseScrape
                 foreach ($articles as $article) {
                     $image = $xpath->evaluate('./figure/a/img', $article);
                     $time = $xpath->evaluate('./div/header/span', $article);
-                    $_title = $xpath->evaluate('./div/header/a', $article);
-                    $_tags = $xpath->evaluate('./div/footer/a', $article);
-
-                    if ($_title->count() === 0) {
-                        $title = '';
-                        $link = '';
-                    }
-                    else {
-                        $title = $_title[0]->textContent;
-                        $link = $_title[0]->getAttribute('href');
-                    }
-
-                    if ($_tags->count() === 0) {
-                        $tags = '';
-                        $tagsLink = '';
-                    }
-                    else {
-                        $tags = $_tags[0]->textContent;
-                        $tagsLink = $origin . $_tags[0]->getAttribute('href');
-                    }
+                    $title = $xpath->evaluate('./div/header/a', $article);
+                    $tags = $xpath->evaluate('./div/footer/a', $article);
 
                     $this->scrapedItems->addItem(
                         ($image->count() === 0 ? '' : $image[0]->getAttribute('data-src')),
                         ($time->count() === 0 ? '' : $time[0]->textContent),
-                        $title,
-                        $link,
-                        $tags,
-                        $tagsLink
+                        ($title->count() === 0 ? '' : $title[0]->textContent),
+                        ($title->count() === 0 ? '' : $title[0]->getAttribute('href')), // link
+                        ($tags->count() === 0 ? '' : $tags[0]->textContent),
                     );
 
                     $this->showProgress($count++, $totArticles);
@@ -161,9 +143,8 @@ class WwwTrekkingItClass extends BaseScrape
         return ScrapeResult::OK;
     }
 
-    /*public function finalize(string $outputDir, string $fileName, string $search) : void
+    public static function getSite() : string
     {
-        Log::info('called finalize()');
-        return;
-    }*/
+        return 'https://www.trekking.it';
+    }
 }
