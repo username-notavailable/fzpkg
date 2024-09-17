@@ -8,10 +8,144 @@ use Illuminate\Console\Command;
 use Symfony\Component\Process\Process;
 use RuntimeException;
 use Illuminate\Filesystem\Filesystem;
+use Illuminate\Support\Facades\Log;
 
 class BaseCommand extends Command
 {
-    protected function checkEnvFlag(string $flagName, string $errorMessage) 
+    protected $logOutText = true;
+    protected $logOutLabelledText = true;
+
+    protected function outError(string $message, $verbosity = null) : void
+    {
+        $this->__outText('error', $message, $verbosity);
+    }
+
+    protected function outWarning(string $message, $verbosity = null) : void
+    {
+        $this->__outText('warning', $message, $verbosity);
+    }
+
+    protected function outInfo(string $message, $verbosity = null) : void
+    {
+        $this->__outText('info', $message, $verbosity);
+    }
+
+    protected function outComment(string $message, $verbosity = null) : void
+    {
+        $this->__outText('comment', $message, $verbosity);
+    }
+
+    protected function outText(string $message, $verbosity = null) : void
+    {
+        $this->__outText('text', $message, $verbosity);
+    }
+
+    private function __outText(string $type, string $message, $verbosity = null) : void
+    {
+        $logLevel = '';
+    
+        switch ($type) {
+            case 'error':
+            case 'warning':
+            case 'info':
+            case 'comment':
+                $logLevel = $type === 'comment' ? 'info' : $type;
+
+                $this->line($message, $type, $verbosity);
+                break;
+            
+            case 'text':
+                $logLevel = 'info';
+
+                $this->line($message, null, $verbosity);
+                break;
+
+            default:
+                $logLevel = 'info';
+
+                $this->line($message, null, $verbosity);
+                break;
+        }
+
+        if ($this->logOutText) {
+            Log::log($logLevel, $message, [$this->signature, $type]);
+        }
+    }
+
+    // --- //
+
+    protected function outLabelledError(string $message, int $verbosity = \Symfony\Component\Console\Output\OutputInterface::VERBOSITY_NORMAL) : void
+    {
+        $this->__outLabelledText('error', $message, $verbosity);
+    }
+
+    protected function outLabelledWarning(string $message, int $verbosity = \Symfony\Component\Console\Output\OutputInterface::VERBOSITY_NORMAL) : void
+    {
+        $this->__outLabelledText('warning', $message, $verbosity);
+    }
+
+    protected function outLabelledInfo(string $message, int $verbosity = \Symfony\Component\Console\Output\OutputInterface::VERBOSITY_NORMAL) : void
+    {
+        $this->__outLabelledText('info', $message, $verbosity);
+    }
+
+    protected function outLabelledSuccess(string $message, int $verbosity = \Symfony\Component\Console\Output\OutputInterface::VERBOSITY_NORMAL) : void
+    {
+        $this->__outLabelledText('success', $message, $verbosity);
+    }
+
+    private function __outLabelledText(string $type, string $message, int $verbosity = \Symfony\Component\Console\Output\OutputInterface::VERBOSITY_NORMAL) : void
+    {
+        $logLevel = '';
+
+        switch ($type) {
+            case 'error':
+                $logLevel = 'error';
+                
+                $this->outputComponents()->error($message, $verbosity);
+                break;
+
+            case 'warning':
+                $logLevel = 'warning';
+                
+                $this->outputComponents()->warn($message, $verbosity);
+                break;
+
+            case 'info':
+                $logLevel = 'info';
+                
+                $this->outputComponents()->info($message, $verbosity);
+                break;
+            
+            case 'success':
+                $logLevel = 'info';
+
+                $this->outputComponents()->success($message, $verbosity);
+                break;
+
+            default:
+                $logLevel = 'info';
+                
+                $this->outputComponents()->info($message, $verbosity);
+                break;
+        }
+
+        if ($this->logOutLabelledText) {
+            Log::log($logLevel, $message, [$this->signature, $type]);
+        }
+    }
+
+    // --- //
+
+    /**
+     * 
+     * Check (boolean) fz install FLAG_NAME into .env, fail with $errorMessage if FLAG_NAME=true
+     *
+     * @param  string $flagName
+     * @param  string $errorMessage
+     * @return void
+     */
+    protected function checkEnvFlag(string $flagName, string $errorMessage) : void
     {
         $fileSystem = new Filesystem();
 
@@ -38,7 +172,14 @@ class BaseCommand extends Command
         }
     }
 
-    protected function updateEnvFile(array $targets)
+    /**
+     * 
+     * Update CONF_VALUES into .env
+     *
+     * @param  array $targets [<CONF_NAME>]['from'] = old value, [<CONF_NAME>]['to'] = new value
+     * @return void
+     */
+    protected function updateEnvFile(array $targets) : void
     {
         $fileSystem = new Filesystem();
 
@@ -57,7 +198,14 @@ class BaseCommand extends Command
         }
     }
 
-    protected function updateEnvFileOrAppend(array $targets)
+    /**
+     * 
+     * Update CONF_VALUES into .env, append [<CONF_NAME>]['to'] if CONF_NAME not exists
+     *
+     * @param  array $targets [<CONF_NAME>]['from'] = old value, [<CONF_NAME>]['to'] = new value
+     * @return void
+     */
+    protected function updateEnvFileOrAppend(array $targets) : void
     {
         $fileSystem = new Filesystem();
 

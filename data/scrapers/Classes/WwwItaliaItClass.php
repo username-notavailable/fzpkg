@@ -2,13 +2,13 @@
 
 namespace App\Scrapers\Classes;
 
-use Fuzzy\Fzpkg\Classes\BaseScrape;
-use Fuzzy\Fzpkg\Enums\ScrapeResult;
+use Fuzzy\Fzpkg\Classes\Scrapers\BaseScraper;
+use Fuzzy\Fzpkg\Enums\Scrapers\ScrapeResult;
 //use Fuzzy\Fzpkg\Enums\RunScraperResult;
 //use Illuminate\Support\Facades\Log;
 //use App\Scrapers\Search\SharedSearchWords;
 
-class WwwItaliaItClass extends BaseScrape
+class WwwItaliaItClass extends BaseScraper
 {
     public function __construct()
     {
@@ -31,6 +31,7 @@ class WwwItaliaItClass extends BaseScrape
         $page = 0;
         $nbrPages = '';
         $count = 1;
+        $item = [];
         $done = false;
         $applicationId = '';
         $apiKey = '';
@@ -109,19 +110,13 @@ class WwwItaliaItClass extends BaseScrape
             }
 
             foreach ($data['results'][0]['hits'] as $article) {
-                $image = $article['image'];
-                $time = '';
-                $title = $article['title'];
-                $link = $article['url'];;
-                $tags = implode(', ', $article['_tags']);
+                $item['image'] = $article['image'];
+                $item['time'] = '';
+                $item['title'] = $article['title'];
+                $item['link'] = $article['url'];;
+                $item['tags'] = implode(', ', $article['_tags']);
 
-                $this->scrapedItems->addItem(
-                    $image,
-                    $time,
-                    $title,
-                    $link,
-                    $tags
-                );
+                $this->scrapedItems->addItem($item);
 
                 $this->showProgress($count++, $totArticles);
             }

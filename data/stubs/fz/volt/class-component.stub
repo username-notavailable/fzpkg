@@ -1,0 +1,45 @@
+<?php
+
+namespace App\Livewire;
+
+use Livewire\Volt\Component;
+use Illuminate\Support\Facades\Log;
+use Livewire\Attributes\On;
+
+new class extends Component
+{
+    // https://livewire.laravel.com/docs/volt#lifecycle-hooks
+
+    public function boot()
+    {}
+
+    public function booted()
+    {}
+
+    public function mount()
+    {}
+
+    public function hydrate()
+    {}
+
+    public function dehydrate()
+    {}
+
+    public function updating()
+    {}
+
+    public function updated()
+    {}
+}
+
+?>
+
+<div>
+
+    {{ inspire_quote }}
+
+    @script
+        <script>
+        </script>
+    @endscript
+</div>

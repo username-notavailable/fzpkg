@@ -1,0 +1,34 @@
+<?php
+
+namespace App\Livewire;
+
+use function Livewire\Volt\{state};
+use function Livewire\Volt\{boot, booted, mount, hydrate, dehydrate, updating, updated};
+use Illuminate\Support\Facades\Log;
+use Livewire\Attributes\On;
+
+state(['count' => 0]);
+ 
+$increment = fn () => $this->count++;
+
+// https://livewire.laravel.com/docs/volt#lifecycle-hooks
+
+// boot(fn () => /* ... */);
+// booted(fn () => /* ... */);
+// mount(fn () => /* ... */);
+// hydrate(['count' => fn () => /* ... */]);
+// dehydrate(['count' => fn () => /* ... */]);
+// updating(['count' => fn () => /* ... */]);
+// updated(['count' => fn () => /* ... */]);
+
+?>
+
+<div>
+    <h1>{{ $count }}</h1>
+    <button wire:click="increment">+</button>
+
+    @script
+        <script>
+        </script>
+    @endscript
+</div>

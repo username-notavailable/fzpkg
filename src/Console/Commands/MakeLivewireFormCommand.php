@@ -6,25 +6,15 @@ use Illuminate\Console\GeneratorCommand;
 
 class MakeLivewireFormCommand extends GeneratorCommand
 {
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
     protected $signature = 'fz:make:livewire:form {name : Form name} {model : Model name}';
 
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
     protected $description = 'Create a new Livewire model form: $fillable and $attributes must be defined into the model';
 
     protected $type = 'Form';
 
     private $modelInstance;
 
-    protected function getStub()
+    protected function getStub() : string
     {
         return base_path('stubs/fz/livewire/form.stub');
     }

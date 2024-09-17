@@ -9,10 +9,12 @@ use Illuminate\Support\ServiceProvider;
 use Fuzzy\Fzpkg\Console\Commands\InstallEventsCommand;
 use Fuzzy\Fzpkg\Console\Commands\InstallLanguagesCommand;
 use Fuzzy\Fzpkg\Console\Commands\InstallLivewireLayoutsCommand;
+use Fuzzy\Fzpkg\Console\Commands\InstallMiddlewaresCommand;
 use Fuzzy\Fzpkg\Console\Commands\InstallScrapersCommand;
 use Fuzzy\Fzpkg\Console\Commands\InstallStubsCommand;
 use Fuzzy\Fzpkg\Console\Commands\InstallUtilsCommand;
 use Fuzzy\Fzpkg\Console\Commands\MakeLivewireFormCommand;
+use Fuzzy\Fzpkg\Console\Commands\MakeVoltComponentCommand;
 use Fuzzy\Fzpkg\Console\Commands\RunScrapersCommand;
 
 final class PackageServiceProvider extends ServiceProvider
@@ -29,10 +31,12 @@ final class PackageServiceProvider extends ServiceProvider
                     InstallEventsCommand::class,
                     InstallLanguagesCommand::class,
                     InstallLivewireLayoutsCommand::class,
+                    InstallMiddlewaresCommand::class,
                     InstallScrapersCommand::class,
                     InstallStubsCommand::class,
                     InstallUtilsCommand::class,
                     MakeLivewireFormCommand::class,
+                    MakeVoltComponentCommand::class,
                     RunScrapersCommand::class
                 ],
             );

@@ -10,7 +10,7 @@ final class InstallStubsCommand extends BaseCommand
 {
     protected $signature = 'fz:install:stubs';
 
-    protected $description = 'Install stubs';
+    protected $description = 'Publish fz stubs';
 
     public function handle(): void
     {

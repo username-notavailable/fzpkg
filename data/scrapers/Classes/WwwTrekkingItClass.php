@@ -2,13 +2,13 @@
 
 namespace App\Scrapers\Classes;
 
-use Fuzzy\Fzpkg\Classes\BaseScrape;
-use Fuzzy\Fzpkg\Enums\ScrapeResult;
+use Fuzzy\Fzpkg\Classes\Scrapers\BaseScraper;
+use Fuzzy\Fzpkg\Enums\Scrapers\ScrapeResult;
 //use Fuzzy\Fzpkg\Enums\RunScraperResult;
 //use Illuminate\Support\Facades\Log;
 //use App\Scrapers\Search\SharedSearchWords;
 
-class WwwTrekkingItClass extends BaseScrape
+class WwwTrekkingItClass extends BaseScraper
 {
     public function __construct()
     {
@@ -30,6 +30,7 @@ class WwwTrekkingItClass extends BaseScrape
     {
         $page = 1;
         $count = 1;
+        $item = [];
         $done = false;
         $nonce = '';
         $totArticles = '';
@@ -123,13 +124,13 @@ class WwwTrekkingItClass extends BaseScrape
                     $title = $xpath->evaluate('./div/header/a', $article);
                     $tags = $xpath->evaluate('./div/footer/a', $article);
 
-                    $this->scrapedItems->addItem(
-                        ($image->count() === 0 ? '' : $image[0]->getAttribute('data-src')),
-                        ($time->count() === 0 ? '' : $time[0]->textContent),
-                        ($title->count() === 0 ? '' : $title[0]->textContent),
-                        ($title->count() === 0 ? '' : $title[0]->getAttribute('href')), // link
-                        ($tags->count() === 0 ? '' : $tags[0]->textContent),
-                    );
+                    $item['image'] = ($image->count() === 0 ? '' : $image[0]->getAttribute('data-src'));
+                    $item['time'] = ($time->count() === 0 ? '' : $time[0]->textContent);
+                    $item['title'] = ($title->count() === 0 ? '' : $title[0]->textContent);
+                    $item['link'] = ($title->count() === 0 ? '' : $title[0]->getAttribute('href')); // link
+                    $item['tags'] = ($tags->count() === 0 ? '' : $tags[0]->textContent);
+
+                    $this->scrapedItems->addItem($item);
 
                     $this->showProgress($count++, $totArticles);
                 }

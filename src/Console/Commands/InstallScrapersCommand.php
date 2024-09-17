@@ -10,7 +10,7 @@ final class InstallScrapersCommand extends BaseCommand
 {
     protected $signature = 'fz:install:scrapers';
 
-    protected $description = 'Install scrapers';
+    protected $description = 'Install default fz scrapers classes';
 
     public function handle(): void
     {

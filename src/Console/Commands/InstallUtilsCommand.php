@@ -26,7 +26,7 @@ final class InstallUtilsCommand extends BaseCommand
         $fileSystem->ensureDirectoryExists(resource_path('sass'));
         $fileSystem->copyDirectory(__DIR__.'/../../../data/utils/sass', resource_path('sass'));
 
-        $fileSystem->ensureDirectoryExists(resource_path('utils'));
+        //$fileSystem->ensureDirectoryExists(resource_path('utils'));
 
         $laravelBootstrapJsPath = resource_path('js/bootstrap.js');
 

@@ -10,7 +10,7 @@ final class InstallLanguagesCommand extends BaseCommand
 {
     protected $signature = 'fz:install:langs';
 
-    protected $description = 'Install languages';
+    protected $description = 'Publish all language files that are available for customization';
 
     public function handle(): void
     {

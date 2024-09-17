@@ -1,18 +1,20 @@
 <?php
 
-namespace Fuzzy\Fzpkg\Classes;
+declare(strict_types=1);
+
+namespace Fuzzy\Fzpkg\Classes\Scrapers;
 
 use GuzzleHttp\Client;
 use Illuminate\Console\OutputStyle;
 use Illuminate\Console\View\Components\Factory;
-use Fuzzy\Fzpkg\Enums\ScrapeResult;
-use Fuzzy\Fzpkg\Enums\RunScraperResult;
-use Fuzzy\Fzpkg\Classes\ScrapedItems;
+use Fuzzy\Fzpkg\Enums\Scrapers\ScrapeResult;
+use Fuzzy\Fzpkg\Enums\Scrapers\RunScraperResult;
+use Fuzzy\Fzpkg\Classes\Scrapers\ScrapedItems;
 use Symfony\Component\Console\Helper\ProgressBar;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-class BaseScrape 
+class BaseScraper 
 {
     protected Client $httpClient;
     protected ScrapedItems $scrapedItems;

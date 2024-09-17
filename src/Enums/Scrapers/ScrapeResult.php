@@ -1,6 +1,6 @@
 <?php
 
-namespace Fuzzy\Fzpkg\Enums;
+namespace Fuzzy\Fzpkg\Enums\Scrapers;
 
 enum ScrapeResult
 {

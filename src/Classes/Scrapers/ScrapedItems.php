@@ -1,6 +1,8 @@
 <?php
 
-namespace Fuzzy\Fzpkg\Classes;
+declare(strict_types=1);
+
+namespace Fuzzy\Fzpkg\Classes\Scrapers;
 
 class ScrapedItems implements \Iterator
 {
@@ -13,22 +15,15 @@ class ScrapedItems implements \Iterator
         $this->index = 0;
     }
 
-    final public function addItem(string $image, string $time, string $title, string $link, string $tags) : void
+    final public function addItem(array $item) : void
     {
-        $i = [ $image, $time, $title, $link, $tags ];
-    
-        $items = array_map(function($item) { return trim($item, " \t\n"); }, $i);
+        foreach (array_keys($item) as $key) {
+            $item[$key] = trim($item[$key], " \t\n");
+        }
 
-        $md5 = hash('md5', implode('', $items));
+        $item['__md5__'] = hash('md5', implode('', array_keys($item)) . implode('', array_values($item)));
 
-        $this->scrapedItems[] = [
-            'md5' => $md5,
-            'image' => $items[0],
-            'time' =>  $items[1],
-            'title' => $items[2],
-            'link' => $items[3],
-            'tags' => $items[4]
-        ];
+        $this->scrapedItems[] = $item;
 
         return;
     }
