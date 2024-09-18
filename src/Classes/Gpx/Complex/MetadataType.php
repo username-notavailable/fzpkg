@@ -13,10 +13,10 @@ class MetadataType
     public array $links;
     public string $time;
     public string $keywords;
-    //public $bounds;
-    //public $extensions;
+    public ?BoundsType $bounds;
+    public ?\DOMNode $extensions;
 
-    public function __construct(\DOMXPath &$xPath, \DOMNode $currentNode)
+    public function __construct(\DOMXPath &$xPath, \DOMNode &$currentNode)
     {
         $this->name = $xPath->evaluate('string(./ns:name)', $currentNode);
         $this->desc = $xPath->evaluate('string(./ns:desc)', $currentNode);
@@ -37,7 +37,10 @@ class MetadataType
         $this->time = $xPath->evaluate('string(./ns:time)', $currentNode);
         $this->keywords = $xPath->evaluate('string(./ns:keywords)', $currentNode);
 
-        var_dump($this);
-        die();
+        $nodes = $xPath->query('./ns:bounds', $currentNode);
+        $this->bounds = $nodes->count() > 0 ? new BoundsType($xPath, $nodes[0]) : null;
+
+        $nodes = $xPath->query('./ns:extensions', $currentNode);
+        $this->extensions = $nodes->count() > 0 ? $nodes[0] : null;
     }
 }

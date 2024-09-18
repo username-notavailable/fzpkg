@@ -26,10 +26,11 @@ class GpxReader
      * @param int       $options    (https://www.php.net/manual/en/domdocument.load.php)
      * @param string    $version    (https://php.net/manual/en/domdocument.construct.php)
      * @param string    $encoding   (https://php.net/manual/en/domdocument.construct.php)
+     * @param bool      $validateSchema
      * 
      * @throws Exception
      */
-    public function loadGpxFile(string $filename, int $options = 0, string $version = '1.0', string $encoding = '') : void
+    public function loadGpxFile(string $filename, int $options = 0, string $version = '1.0', string $encoding = '', $validateSchema = true) : void
     {
         libxml_use_internal_errors(true);
 
@@ -42,6 +43,13 @@ class GpxReader
             throw new \Exception('Invalid GPX file, check getXmlErrors()');
         }
         else {
+            if ($validateSchema && !$xmlDoc->schemaValidate(__DIR__ . '/../../../data/gpx.xsd')) {
+                $this->xmlErrors = libxml_get_errors();
+                libxml_clear_errors();
+
+                throw new \Exception('Invalid GPX file schema, check getXmlErrors()');
+            }
+
             $this->xmlErrors = [];
 
             $this->xPath = new \DOMXPath($xmlDoc, false);
@@ -55,15 +63,9 @@ class GpxReader
 
     /**
      * https://php.net/manual/en/function.libxml-get-errors.php
-     * 
-     * @throws Exception
      */
     public function getXmlErrors() : array
     {
-        if (empty($this->xPath)) {
-            throw new \Exception('Gpx file not loaded');
-        }
-
         return $this->xmlErrors;
     }
 

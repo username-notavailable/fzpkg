@@ -10,7 +10,7 @@ class LinkType
     public string $text;
     public string $type;
 
-    public function __construct(\DOMXPath &$xPath, \DOMNode $currentNode)
+    public function __construct(\DOMXPath &$xPath, \DOMNode &$currentNode)
     {
         $this->href = $currentNode->getAttribute('href');
         $this->text = $xPath->evaluate('string(./ns:text)', $currentNode);

@@ -11,11 +11,11 @@ class BoundsType
     public float $maxlat;
     public float $maxlon;
 
-    public function __construct(float $minlat, float $minlon, float $maxlat, float $maxlon)
+    public function __construct(\DOMXPath &$xPath, \DOMNode &$currentNode)
     {
-        $this->minlat = $minlat;
-        $this->minlon = $minlon;
-        $this->maxlat = $maxlat;
-        $this->maxlon = $maxlon;
+        $this->minlat = floatval($currentNode->getAttribute('minlat'));
+        $this->minlon = floatval($currentNode->getAttribute('minlon'));
+        $this->maxlat = floatval($currentNode->getAttribute('maxlat'));
+        $this->maxlon = floatval($currentNode->getAttribute('maxlon'));
     }
 }

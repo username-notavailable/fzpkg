@@ -10,7 +10,7 @@ class PersonType
     public ?EmailType $email;
     public ?LinkType $link;
 
-    public function __construct(\DOMXPath &$xPath, \DOMNode $currentNode)
+    public function __construct(\DOMXPath &$xPath, \DOMNode &$currentNode)
     {
         $this->name = $xPath->evaluate('string(./ns:name)', $currentNode);
 

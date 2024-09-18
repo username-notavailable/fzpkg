@@ -9,7 +9,7 @@ class EmailType
     public string $id;
     public string $domain;
 
-    public function __construct(\DOMXPath &$xPath, \DOMNode $currentNode)
+    public function __construct(\DOMXPath &$xPath, \DOMNode &$currentNode)
     {
         $this->id = $currentNode->getAttribute('id');
         $this->domain = $currentNode->getAttribute('domain');

@@ -10,7 +10,7 @@ class CopyrightType
     public string $year;
     public string $license;
 
-    public function __construct(\DOMXPath &$xPath, \DOMNode $currentNode)
+    public function __construct(\DOMXPath &$xPath, \DOMNode &$currentNode)
     {
         $this->author = $currentNode->getAttribute('author');
         $this->year = $xPath->evaluate('string(./ns:year)', $currentNode);
