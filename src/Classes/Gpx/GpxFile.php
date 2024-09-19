@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace Fuzzy\Fzpkg\Classes\Gpx;
 
 use Fuzzy\Fzpkg\Classes\Gpx\Complex\MetadataType;
-use Fuzzy\Fzpkg\Classes\Gpx\Complex\WtpType;
+use Fuzzy\Fzpkg\Classes\Gpx\Complex\WptType;
+use Fuzzy\Fzpkg\Classes\Gpx\Complex\RteType;
+use Fuzzy\Fzpkg\Classes\Gpx\Complex\TrkType;
 use Fuzzy\Fzpkg\Classes\Gpx\Complex\ExtensionsType;
+use Fuzzy\Fzpkg\Classes\Utils\Utils;
 
 class GpxFile
 {
@@ -26,8 +29,8 @@ class GpxFile
         $this->xmlErrors = [];
         $this->xPath = null;
 
-        $this->version = '';
-        $this->creator = '';
+        $this->version = '1.1';
+        $this->creator = 'Fzpkg';
         $this->metadata = new MetadataType();
         $this->waypoints = [];
         $this->routes = [];
@@ -61,7 +64,7 @@ class GpxFile
             throw new \Exception('Invalid GPX file, check getXmlErrors()');
         }
         else {
-            if ($validateSchema && !$xmlDoc->schemaValidate(__DIR__ . '/../../../data/gpx.xsd')) {
+            if ($validateSchema && !$xmlDoc->schemaValidate(Utils::makeFilePath(__DIR__, '..', '..', '..', 'data', 'gpx.xsd'))) {
                 $this->xmlErrors = libxml_get_errors();
                 libxml_clear_errors();
 
@@ -87,25 +90,56 @@ class GpxFile
             $this->waypoints = [];
 
             foreach ($this->__query('/ns:gpx/ns:wpt') as $node) {
-                $this->waypoints[] = (new WtpType())->loadFromXpath($this->xPath, $node);
+                $this->waypoints[] = (new WptType())->loadFromXpath($this->xPath, $node);
             }
 
-            /*$this->routes = [];
+            $this->routes = [];
 
             foreach ($this->__query('/ns:gpx/ns:rte') as $node) {
-                $this->routes[] = (new WtpType())->loadFromXpath($this->xPath, $node);
+                $this->routes[] = (new RteType())->loadFromXpath($this->xPath, $node);
             }
 
             $this->tracks = [];
 
             foreach ($this->__query('/ns:gpx/ns:trk') as $node) {
-                $this->tracks[] = (new WtpType())->loadFromXpath($this->xPath, $node);
-            }*/
+                $this->tracks[] = (new TrkType())->loadFromXpath($this->xPath, $node);
+            }
 
             $nodes = $this->__query('/ns:gpx/ns:extensions');
 
             $this->extensions = $nodes->count() > 0 ? (new ExtensionsType())->loadFromXpath($this->xPath, $nodes[0]) : new ExtensionsType();
         }
+    }
+
+    /**
+     * @param string $filename
+     * 
+     * 
+     */
+    public function saveGpxFile(string $filename) : void
+    {
+        $firstLine = '<?xml version="1.0"?>';
+        $openTag = '<gpx version="' . $this->version . '" creator="' . $this->creator . '" xmlns="http://www.topografix.com/GPX/1/1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">';
+        $closeTag = '</gpx>';
+
+        file_put_contents($filename, $firstLine);
+        file_put_contents($filename, $openTag, FILE_APPEND);
+
+        file_put_contents($filename, $this->metadata, FILE_APPEND);
+
+        foreach ($this->waypoints as $waypoint) {
+            file_put_contents($filename, $waypoint, FILE_APPEND);
+        }
+
+        foreach ($this->routes as $route) {
+            file_put_contents($filename, $route, FILE_APPEND);
+        }
+
+        foreach ($this->tracks as $track) {
+            file_put_contents($filename, $track, FILE_APPEND);
+        }
+
+        file_put_contents($filename, $closeTag, FILE_APPEND);
     }
 
     /**

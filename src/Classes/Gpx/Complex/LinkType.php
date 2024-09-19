@@ -27,4 +27,27 @@ class LinkType extends BaseType
 
         return $this;
     }
+
+    public function __toString() : string
+    {
+        $string = '<link ';
+
+        if (!is_null($this->href)) {
+            $string .= 'href="' . $this->href . '" ';
+        }
+
+        $string = trim($string) . '>';
+
+        if (!is_null($this->text)) {
+            $string .= '<text>' . $this->text . '</text>';
+        }
+
+        if (!is_null($this->type)) {
+            $string .= '<type>' . $this->type . '</type>';
+        }
+
+        $string .= '</link>';
+
+        return $string;
+    }
 }

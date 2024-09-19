@@ -27,4 +27,27 @@ class CopyrightType extends BaseType
 
         return $this;
     }
+
+    public function __toString() : string
+    {
+        $string = '<copyright ';
+
+        if (!is_null($this->author)) {
+            $string .= 'author="' . $this->author . '" ';
+        }
+
+        $string = trim($string) . '>';
+
+        if (!is_null($this->year)) {
+            $string .= '<year>' . $this->year . '</year>';
+        }
+
+        if (!is_null($this->license)) {
+            $string .= '<license>' . $this->license . '</license>';
+        }
+
+        $string .= '</copyright>';
+
+        return $string;
+    }
 }

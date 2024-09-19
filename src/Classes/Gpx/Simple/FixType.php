@@ -15,6 +15,11 @@ class FixType
         $this->__set('value', $value);
     }
 
+    public function __toString() : string
+    {
+        return (string)$this->value;
+    }
+
     public function __get(string $name) : mixed
     {
         if ($name === 'value') {

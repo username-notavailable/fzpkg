@@ -12,7 +12,7 @@ use Fuzzy\Fzpkg\Classes\Gpx\Simple\DgpsStationType;
 use Fuzzy\Fzpkg\Classes\Gpx\BaseType;
 use ErrorException;
 
-class WtpType extends BaseType
+class WptType extends BaseType
 {
     private LatitudeType $lat;
     private LongitudeType $lon;
@@ -35,6 +35,8 @@ class WtpType extends BaseType
     public ?float $ageofdgpsdata;
     private ?DgpsStationType $dgpsid;
     public ?ExtensionsType $extensions;
+
+    private string $toStringTagName;
 
     public function __construct()
     {
@@ -59,6 +61,8 @@ class WtpType extends BaseType
         $this->ageofdgpsdata = null;
         $this->dgpsid = new DgpsStationType();
         $this->extensions = new ExtensionsType();
+
+        $this->toStringTagName = 'wpt';
     }
 
     public function loadFromXpath(\DOMXPath &$xPath, \DOMNode &$currentNode) : self
@@ -102,6 +106,102 @@ class WtpType extends BaseType
         $this->extensions = $nodes->count() > 0 ? (new ExtensionsType())->loadFromXpath($xPath, $nodes[0]) : null;
     
         return $this;
+    }
+
+    public function setToStringTagName(string $tagName = 'wpt')
+    {
+        $this->toStringTagName = $tagName;
+    }
+
+    public function __toString() : string
+    {
+        $string = '<' . $this->toStringTagName . ' ';
+
+        if (!is_null($this->lat)) {
+            $string .= 'lat="' . $this->lat . '" ';
+        }
+
+        if (!is_null($this->lon)) {
+            $string .= 'lon="' . $this->lon . '" ';
+        }
+
+        $string = trim($string) . '>';
+
+        if (!is_null($this->ele)) {
+            $string .= '<ele>' . $this->ele . '</ele>';
+        }
+
+        if (!is_null($this->time)) {
+            $string .= '<time>' . $this->time . '</time>';
+        }
+
+        if (!is_null($this->magvar->value)) {
+            $string .= '<magvar>' . $this->magvar . '</magvar>';
+        }
+
+        if (!is_null($this->geoidheight)) {
+            $string .= '<geoidheight>' . $this->geoidheight . '</geoidheight>';
+        }
+
+        if (!is_null($this->name)) {
+            $string .= '<name>' . $this->name . '</name>';
+        }
+
+        if (!is_null($this->cmt)) {
+            $string .= '<cmt>' . $this->cmt . '</cmt>';
+        }
+
+        if (!is_null($this->desc)) {
+            $string .= '<desc>' . $this->desc . '</desc>';
+        }
+
+        if (!is_null($this->src)) {
+            $string .= '<src>' . $this->src . '</src>';
+        }
+
+        foreach ($this->links as $link) {
+            $string .= $link;
+        }
+
+        if (!is_null($this->sym)) {
+            $string .= '<sym>' . $this->sym . '</sym>';
+        }
+
+        if (!is_null($this->type)) {
+            $string .= '<type>' . $this->type . '</type>';
+        }
+
+        if (!is_null($this->fix->value)) {
+            $string .= '<fix>' . $this->fix . '</fix>';
+        }
+
+        if (!is_null($this->sat)) {
+            $string .= '<sat>' . $this->sat . '</sat>';
+        }
+
+        if (!is_null($this->hdop)) {
+            $string .= '<hdop>' . $this->hdop . '</hdop>';
+        }
+
+        if (!is_null($this->vdop)) {
+            $string .= '<vdop>' . $this->vdop . '</vdop>';
+        }
+
+        if (!is_null($this->pdop)) {
+            $string .= '<pdop>' . $this->pdop . '</pdop>';
+        }
+
+        if (!is_null($this->ageofdgpsdata)) {
+            $string .= '<ageofdgpsdata>' . $this->ageofdgpsdata . '</ageofdgpsdata>';
+        }
+
+        if (!is_null($this->dgpsid->value)) {
+            $string .= '<dgpsid>' . $this->dgpsid . '</dgpsid>';
+        }
+
+        $string .= '</' . $this->toStringTagName . '>';
+
+        return $string;
     }
 
     public function __get(string $name) : mixed

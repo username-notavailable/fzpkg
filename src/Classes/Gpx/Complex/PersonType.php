@@ -31,4 +31,20 @@ class PersonType extends BaseType
 
         return $this;
     }
+
+    public function __toString() : string
+    {
+        $string = '<author>';
+
+        if (!is_null($this->name)) {
+            $string .= '<name>' . $this->name . '</name>';
+        }
+
+        $string .= $this->email;
+        $string .= $this->link;
+
+        $string .= '</author>';
+
+        return $string;
+    }
 }

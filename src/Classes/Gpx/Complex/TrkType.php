@@ -6,41 +6,37 @@ namespace Fuzzy\Fzpkg\Classes\Gpx\Complex;
 
 use Fuzzy\Fzpkg\Classes\Gpx\BaseType;
 
-class MetadataType extends BaseType
+class TrkType extends BaseType
 {
     public ?string $name;
+    public ?string $cmt;
     public ?string $desc;
-    public ?PersonType $author;
-    public ?CopyrightType $copyright;
+    public ?string $src;
     public array $links;
-    public ?string $time;
-    public ?string $keywords;
-    public ?BoundsType $bounds;
+    public ?int $number;
+    public ?string $type;
     public ?ExtensionsType $extensions;
-
+    public array $trkseg;
+    
     public function __construct()
     {
         $this->name = null;
+        $this->cmt = null;
         $this->desc = null;
-        $this->author = new PersonType();
-        $this->copyright = new CopyrightType();
+        $this->src = null;
         $this->links = [];
-        $this->time = null;
-        $this->keywords = null;
-        $this->bounds = new BoundsType();
+        $this->number = null;
+        $this->type = null;
         $this->extensions = new ExtensionsType();
+        $this->trkseg = [];
     }
 
     public function loadFromXpath(\DOMXPath &$xPath, \DOMNode &$currentNode) : self
     {
         $this->name = $this->evaluateString($xPath, './ns:name', $currentNode);
+        $this->cmt = $this->evaluateString($xPath, './ns:cmt', $currentNode);
         $this->desc = $this->evaluateString($xPath, './ns:desc', $currentNode);
-
-        $nodes = $xPath->query('./ns:author', $currentNode);
-        $this->author = $nodes->count() > 0 ? (new PersonType())->loadFromXpath($xPath, $nodes[0]) : null;
-
-        $nodes = $xPath->query('./ns:copyright', $currentNode);
-        $this->copyright = $nodes->count() > 0 ? (new CopyrightType())->loadFromXpath($xPath, $nodes[0]) : null;
+        $this->src = $this->evaluateString($xPath, './ns:src', $currentNode);
 
         $this->links = [];
 
@@ -49,48 +45,59 @@ class MetadataType extends BaseType
             $this->links[] = (new LinkType())->loadFromXpath($xPath, $nodes[$i]);
         }
 
-        $this->time = $this->evaluateDateTime($xPath, './ns:time', $currentNode);
-        $this->keywords = $this->evaluateString($xPath, './ns:keywords', $currentNode);
-
-        $nodes = $xPath->query('./ns:bounds', $currentNode);
-        $this->bounds = $nodes->count() > 0 ? (new BoundsType())->loadFromXpath($xPath, $nodes[0]) : null;
+        $this->number = $this->evaluateNotNegativeInteger($xPath, './ns:number', $currentNode);
+        $this->type = $this->evaluateString($xPath, './ns:type', $currentNode);
 
         $nodes = $xPath->query('./ns:extensions', $currentNode);
         $this->extensions = $nodes->count() > 0 ? (new ExtensionsType())->loadFromXpath($xPath, $nodes[0]) : null;
+
+        $this->trkseg = [];
+
+        $nodes = $xPath->query('./ns:trkseg', $currentNode);
+        for ($i = 0; $i < $nodes->length; $i++) {
+            $this->trkseg[] = (new TrksegType())->loadFromXpath($xPath, $nodes[$i]);
+        }
 
         return $this;
     }
 
     public function __toString() : string
     {
-        $string = '<metadata>';
+        $string = '<trk>';
 
         if (!is_null($this->name)) {
             $string .= '<name>' . $this->name . '</name>';
+        }
+
+        if (!is_null($this->cmt)) {
+            $string .= '<cmt>' . $this->cmt . '</cmt>';
         }
 
         if (!is_null($this->desc)) {
             $string .= '<desc>' . $this->desc . '</desc>';
         }
 
-        $string .= $this->author;
-        $string .= $this->copyright;
+        if (!is_null($this->src)) {
+            $string .= '<src>' . $this->src . '</src>';
+        }
 
         foreach ($this->links as $link) {
             $string .= $link;
         }
 
-        if (!is_null($this->time)) {
-            $string .= '<time>' . $this->time . '</time>';
+        if (!is_null($this->number)) {
+            $string .= '<number>' . $this->number . '</number>';
         }
 
-        if (!is_null($this->keywords)) {
-            $string .= '<keywords>' . $this->keywords . '</keywords>';
+        if (!is_null($this->type)) {
+            $string .= '<type>' . $this->type . '</type>';
         }
 
-        $string .= $this->bounds;
+        foreach ($this->trkseg as $trkseg) {
+            $string .= $trkseg;
+        }
 
-        $string .= '</metadata>';
+        $string .= '</trk>';
 
         return $string;
     }

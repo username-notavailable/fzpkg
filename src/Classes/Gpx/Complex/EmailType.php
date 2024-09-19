@@ -24,4 +24,21 @@ class EmailType extends BaseType
 
         return $this;
     }
+
+    public function __toString() : string
+    {
+        $string = '<email ';
+
+        if (!is_null($this->id)) {
+            $string .= 'id="' . $this->id . '" ';
+        }
+
+        if (!is_null($this->domain)) {
+            $string .= 'domain="' . $this->domain . '" ';
+        }
+
+        $string = trim($string) . '/></email>';
+
+        return $string;
+    }
 }

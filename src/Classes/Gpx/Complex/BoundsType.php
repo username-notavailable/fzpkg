@@ -32,4 +32,27 @@ class BoundsType extends BaseType
 
         return $this;
     }
+
+    public function __toString() : string
+    {
+        $string = '<bounds ';
+
+        if (!is_null($this->minlat)) {
+            $string .= 'minlat="' . $this->minlat . '" ';
+        }
+
+        if (!is_null($this->minlon)) {
+            $string .= 'minlon="' . $this->minlon . '" ';
+        }
+
+        if (!is_null($this->maxlat)) {
+            $string .= 'maxlat="' . $this->maxlat . '" ';
+        }
+
+        if (!is_null($this->maxlon)) {
+            $string .= 'maxlon="' . $this->maxlon . '" ';
+        }
+
+        return trim($string) . '></bounds>';
+    }
 }
