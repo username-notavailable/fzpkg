@@ -4,18 +4,32 @@ declare(strict_types=1);
 
 namespace Fuzzy\Fzpkg\Classes\Gpx\Complex;
 
-class BoundsType
-{
-    public float $minlat;
-    public float $minlon;
-    public float $maxlat;
-    public float $maxlon;
+use Fuzzy\Fzpkg\Classes\Gpx\Simple\LatitudeType;
+use Fuzzy\Fzpkg\Classes\Gpx\Simple\LongitudeType;
+use Fuzzy\Fzpkg\Classes\Gpx\BaseType;
 
-    public function __construct(\DOMXPath &$xPath, \DOMNode &$currentNode)
+class BoundsType extends BaseType
+{
+    public ?LatitudeType $minlat;
+    public ?LongitudeType $minlon;
+    public ?LatitudeType $maxlat;
+    public ?LongitudeType $maxlon;
+
+    public function __construct()
     {
-        $this->minlat = floatval($currentNode->getAttribute('minlat'));
-        $this->minlon = floatval($currentNode->getAttribute('minlon'));
-        $this->maxlat = floatval($currentNode->getAttribute('maxlat'));
-        $this->maxlon = floatval($currentNode->getAttribute('maxlon'));
+        $this->minlat = new LatitudeType();
+        $this->minlon = new LongitudeType();
+        $this->maxlat = new LatitudeType();
+        $this->maxlon = new LongitudeType();
+    }
+
+    public function loadFromXpath(\DOMXPath &$xPath, \DOMNode &$currentNode) : self
+    {
+        $this->minlat = new LatitudeType($this->readAttributeAsDecimal('minlat', $currentNode));
+        $this->minlon = new LongitudeType($this->readAttributeAsDecimal('minlon', $currentNode));
+        $this->maxlat = new LatitudeType($this->readAttributeAsDecimal('maxlat', $currentNode));
+        $this->maxlon = new LongitudeType($this->readAttributeAsDecimal('maxlon', $currentNode));
+
+        return $this;
     }
 }

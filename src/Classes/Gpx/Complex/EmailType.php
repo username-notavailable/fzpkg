@@ -4,14 +4,24 @@ declare(strict_types=1);
 
 namespace Fuzzy\Fzpkg\Classes\Gpx\Complex;
 
-class EmailType
-{
-    public string $id;
-    public string $domain;
+use Fuzzy\Fzpkg\Classes\Gpx\BaseType;
 
-    public function __construct(\DOMXPath &$xPath, \DOMNode &$currentNode)
+class EmailType extends BaseType
+{
+    public ?string $id;
+    public ?string $domain;
+
+    public function __construct()
     {
-        $this->id = $currentNode->getAttribute('id');
-        $this->domain = $currentNode->getAttribute('domain');
+        $this->id = null;
+        $this->domain = null;
+    }
+
+    public function loadFromXpath(\DOMXPath &$xPath, \DOMNode &$currentNode) : self
+    {
+        $this->id = $this->readAttributeAsString('id', $currentNode);
+        $this->domain = $this->readAttributeAsString('domain', $currentNode);
+
+        return $this;
     }
 }

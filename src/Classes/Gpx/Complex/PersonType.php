@@ -4,20 +4,31 @@ declare(strict_types=1);
 
 namespace Fuzzy\Fzpkg\Classes\Gpx\Complex;
 
-class PersonType
+use Fuzzy\Fzpkg\Classes\Gpx\BaseType;
+
+class PersonType extends BaseType
 {
-    public string $name;
+    public ?string $name;
     public ?EmailType $email;
     public ?LinkType $link;
 
-    public function __construct(\DOMXPath &$xPath, \DOMNode &$currentNode)
+    public function __construct()
     {
-        $this->name = $xPath->evaluate('string(./ns:name)', $currentNode);
+        $this->name = null;
+        $this->email = new EmailType();
+        $this->link = new LinkType();
+    }
+
+    public function loadFromXpath(\DOMXPath &$xPath, \DOMNode &$currentNode) : self
+    {
+        $this->name = $this->evaluateString($xPath, './ns:name', $currentNode);
 
         $nodes = $xPath->query('./ns:email', $currentNode);
-        $this->email = $nodes->count() > 0 ? new EmailType($xPath, $nodes[0]) : null;
+        $this->email = $nodes->count() > 0 ? (new EmailType())->loadFromXpath($xPath, $nodes[0]) : null;
 
         $nodes = $xPath->query('./ns:link', $currentNode);
-        $this->link = $nodes->count() > 0 ? new LinkType($xPath, $nodes[0]) : null;
+        $this->link = $nodes->count() > 0 ? (new LinkType())->loadFromXpath($xPath, $nodes[0]) : null;
+
+        return $this;
     }
 }

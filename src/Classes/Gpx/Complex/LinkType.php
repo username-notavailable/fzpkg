@@ -4,16 +4,27 @@ declare(strict_types=1);
 
 namespace Fuzzy\Fzpkg\Classes\Gpx\Complex;
 
-class LinkType
-{
-    public string $href;
-    public string $text;
-    public string $type;
+use Fuzzy\Fzpkg\Classes\Gpx\BaseType;
 
-    public function __construct(\DOMXPath &$xPath, \DOMNode &$currentNode)
+class LinkType extends BaseType
+{
+    public ?string $href;
+    public ?string $text;
+    public ?string $type;
+
+    public function __construct()
     {
-        $this->href = $currentNode->getAttribute('href');
-        $this->text = $xPath->evaluate('string(./ns:text)', $currentNode);
-        $this->type = $xPath->evaluate('string(./ns:type)', $currentNode);
+        $this->href = null;
+        $this->text = null;
+        $this->type = null;
+    }
+    
+    public function loadFromXpath(\DOMXPath &$xPath, \DOMNode &$currentNode) : self
+    {
+        $this->href = $this->readAttributeAsURI('href', $currentNode);
+        $this->text = $this->evaluateString($xPath, './ns:text', $currentNode);
+        $this->type = $this->evaluateString($xPath, './ns:type', $currentNode);
+
+        return $this;
     }
 }
