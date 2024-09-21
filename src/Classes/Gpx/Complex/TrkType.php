@@ -93,6 +93,8 @@ class TrkType extends BaseType
             $string .= '<type>' . $this->type . '</type>';
         }
 
+        $string .= $this->extensions;
+
         foreach ($this->trkseg as $trkseg) {
             $string .= $trkseg;
         }

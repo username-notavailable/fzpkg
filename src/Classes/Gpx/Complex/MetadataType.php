@@ -90,6 +90,8 @@ class MetadataType extends BaseType
 
         $string .= $this->bounds;
 
+        $string .= $this->extensions;
+
         $string .= '</metadata>';
 
         return $string;

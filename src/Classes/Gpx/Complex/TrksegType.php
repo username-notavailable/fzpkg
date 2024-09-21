@@ -41,6 +41,8 @@ class TrksegType extends BaseType
             $string .= $trkpt;
         }
 
+        $string .= $this->extensions;
+
         $string .= '</trkseg>';
 
         return $string;

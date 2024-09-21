@@ -199,6 +199,8 @@ class WptType extends BaseType
             $string .= '<dgpsid>' . $this->dgpsid . '</dgpsid>';
         }
 
+        $string .= $this->extensions;
+
         $string .= '</' . $this->toStringTagName . '>';
 
         return $string;

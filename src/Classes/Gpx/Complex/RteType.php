@@ -93,6 +93,8 @@ class RteType extends BaseType
             $string .= '<type>' . $this->type . '</type>';
         }
 
+        $string .= $this->extensions;
+
         foreach ($this->rtept as $rtept) {
             $rtept->setToStringTagName('rtept');
             $string .= $rtept;
