@@ -11,6 +11,7 @@ use Fuzzy\Fzpkg\Classes\Gpx\Complex\TrkType;
 use Fuzzy\Fzpkg\Classes\Gpx\Complex\ExtensionsType;
 use Fuzzy\Fzpkg\Classes\Utils\Utils;
 
+// https://www.topografix.com/gpx/1/1/
 class GpxFile
 {
     private array $xmlErrors;
@@ -155,8 +156,6 @@ class GpxFile
 
     /**
      * @param string $filename
-     * 
-     * 
      */
     public function saveGpxFile(string $filename) : void
     {
