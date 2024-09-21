@@ -19,7 +19,7 @@ class GpxFile
 
     public array $namespaces;
     public array $schemaLocations;
-    public bool $xsiSchemaLocationMustBeInluded;
+    public bool $xsiSchemaLocationMustExistsOnLoad;
 
     public string $version;
     public string $creator;
@@ -37,13 +37,18 @@ class GpxFile
         $this->namespaces['xmlns'] = 'http://www.topografix.com/GPX/1/1';
         $this->namespaces['xmlns:xsi'] = 'http://www.w3.org/2001/XMLSchema-instance';
         $this->schemaLocations['http://www.topografix.com/GPX/1/1'] = 'http://www.topografix.com/GPX/1/1/gpx.xsd';
-        $this->xsiSchemaLocationMustBeInluded = true;
+        $this->xsiSchemaLocationMustExistsOnLoad = true;
 
         $this->version = '1.1';
         $this->creator = 'Fzpkg';
+
+        // Information about the GPX file, author, and copyright restrictions goes in the metadata section. Providing rich, meaningful information about your GPX files allows others to search for and use your GPS data. 
         $this->metadata = new MetadataType();
+        // wpt represents a waypoint, point of interest, or named feature on a map. 
         $this->waypoints = [];
+        // rte represents route - an ordered list of waypoints representing a series of turn points leading to a destination. 
         $this->routes = [];
+        // trk represents a track - an ordered list of points describing a path. 
         $this->tracks = [];
         $this->extensions = new ExtensionsType();
     }
@@ -119,7 +124,7 @@ class GpxFile
                     }
                 }
             }
-            elseif ($this->xsiSchemaLocationMustBeInluded) {
+            elseif ($this->xsiSchemaLocationMustExistsOnLoad) {
                 throw new \Exception('Invalid GPX file, "xsi:schemaLocation" not found');
             }
 
@@ -154,9 +159,6 @@ class GpxFile
         }
     }
 
-    /**
-     * @param string $filename
-     */
     public function saveGpxFile(string $filename) : void
     {
         file_put_contents($filename, '<?xml version="1.0"?>');
@@ -198,6 +200,75 @@ class GpxFile
         file_put_contents($filename, '</gpx>', FILE_APPEND);
     }
 
+    public function searchWaypointByName(string $name) : ?WptType
+    {
+        return $this->__searchItemByName($this->waypoints, $name);
+    }
+
+    public function searchWaypointsBySymbol(string $symbol) : array
+    {
+        $symbol = strtolower($symbol);
+        $waypoints = [];
+
+        foreach ($this->waypoints as $waypoint) {
+            if (strtolower($waypoint->sym) === $symbol) {
+                $waypoints[] = $waypoint;
+            }
+        }
+
+        return $waypoints;
+    }
+
+    public function searchRouteByName(string $name) : ?RteType
+    {
+        return $this->__searchItemByName($this->routes, $name);
+    }
+
+    public function searchRouteWaypointsBySymbol(string $routeName, string $symbol) : array
+    {
+        $waypoints = [];
+
+        $route = $this->searchRouteByName($routeName);
+
+        if (!is_null($route)) {
+            $symbol = strtolower($symbol);
+        
+            foreach ($route->rtept as $waypoint) {
+                if (strtolower($waypoint->sym) === $symbol) {
+                    $waypoints[] = $waypoint;
+                }
+            }
+        }
+
+        return $waypoints;
+    }
+
+    public function searchTrackByName(string $name) : ?TrkType
+    {
+        return $this->__searchItemByName($this->tracks, $name);
+    }
+
+    public function searchTrackWaypointsBySymbol(string $trackName, string $symbol) : array
+    {
+        $waypoints = [];
+
+        $track = $this->searchTrackByName($trackName);
+
+        if (!is_null($track)) {
+            $symbol = strtolower($symbol);
+        
+            foreach ($track->trkseg as $trackSegment) {
+                foreach ($trackSegment->trkpt as $waypoint) {
+                    if (strtolower($waypoint->sym) === $symbol) {
+                        $waypoints[] = $waypoint;
+                    }
+                }
+            }
+        }
+
+        return $waypoints;
+    }
+
     /**
      * https://php.net/manual/en/function.libxml-get-errors.php
      */
@@ -222,5 +293,18 @@ class GpxFile
         }
 
         return $this->xPath->evaluate($expression);
+    }
+
+    private function __searchItemByName(array &$array, string $name) : mixed
+    {
+        $name = strtolower($name);
+
+        foreach ($array as $item) {
+            if (strtolower($item->name) === $name) {
+                return $item;
+            }
+        }
+
+        return null;
     }
 }
