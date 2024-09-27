@@ -15,7 +15,9 @@ final class RunScrapersCommand extends BaseCommand
 
     public function handle(): void
     {
-        $fileSystem = new Filesystem();
+        $this->enableOutLogs();
+        
+        $filesystem = new Filesystem();
 
         $classes = glob(app_path('Scrapers/Classes') . DIRECTORY_SEPARATOR . '*Class.php');
 
@@ -60,7 +62,7 @@ final class RunScrapersCommand extends BaseCommand
                     else {
                         $outputDir = app_path('Scrapers/output/' . $className);
     
-                        $fileSystem->ensureDirectoryExists($outputDir);
+                        $filesystem->ensureDirectoryExists($outputDir);
     
                         $instance->setOutput($this->output, $this->outputComponents());
                         $searchWords = $instance->getSearchWords();

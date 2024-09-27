@@ -14,12 +14,12 @@ final class InstallLanguagesCommand extends BaseCommand
 
     public function handle(): void
     {
-        $fileSystem = new Filesystem();
+        $filesystem = new Filesystem();
 
         $this->checkEnvFlag('FZ_LANGS_INSTALLED', 'Fz langs already installed');
 
-        $fileSystem->ensureDirectoryExists(base_path('lang'));
-        $fileSystem->copyDirectory(__DIR__.'/../../../data/utils/lang', base_path('lang'));
+        $filesystem->ensureDirectoryExists(base_path('lang'));
+        $filesystem->copyDirectory(__DIR__.'/../../../data/utils/lang', base_path('lang'));
 
         /* --- */
 
@@ -31,5 +31,7 @@ final class InstallLanguagesCommand extends BaseCommand
         ];
 
         $this->updateEnvFileOrAppend($targets);
+
+        $this->outLabelledSuccess('Languages installed');
     }
 }

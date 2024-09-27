@@ -14,14 +14,14 @@ final class InstallScrapersCommand extends BaseCommand
 
     public function handle(): void
     {
-        $fileSystem = new Filesystem();
+        $filesystem = new Filesystem();
 
         $this->checkEnvFlag('FZ_SCRAPERS_INSTALLED', 'Fz scrapers already installed');
 
-        $fileSystem->ensureDirectoryExists(app_path('Scrapers/Classes'));
-        $fileSystem->ensureDirectoryExists(app_path('Scrapers/output'));
+        $filesystem->ensureDirectoryExists(app_path('Scrapers/Classes'));
+        $filesystem->ensureDirectoryExists(app_path('Scrapers/output'));
 
-        $fileSystem->copyDirectory(__DIR__.'/../../../data/scrapers', app_path('Scrapers'));
+        $filesystem->copyDirectory(__DIR__.'/../../../data/scrapers', app_path('Scrapers'));
 
         /* --- */
 
@@ -33,5 +33,7 @@ final class InstallScrapersCommand extends BaseCommand
         ];
 
         $this->updateEnvFileOrAppend($targets);
+
+        $this->outLabelledSuccess('Fuzzy scrapers installed');
     }
 }

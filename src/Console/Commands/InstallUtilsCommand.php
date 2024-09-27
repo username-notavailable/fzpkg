@@ -14,24 +14,24 @@ final class InstallUtilsCommand extends BaseCommand
 
     public function handle(): void
     {
-        $fileSystem = new Filesystem();
+        $filesystem = new Filesystem();
 
         $this->checkEnvFlag('FZ_UTILS_INSTALLED', 'Fz utils already installed');
 
-        $fileSystem->copyDirectory(__DIR__.'/../../../data/utils/favicons', public_path());
+        $filesystem->copyDirectory(__DIR__.'/../../../data/utils/favicons', public_path());
 
-        $fileSystem->ensureDirectoryExists(resource_path('js'));
-        $fileSystem->copyDirectory(__DIR__.'/../../../data/utils/js', resource_path('js'));
+        $filesystem->ensureDirectoryExists(resource_path('js'));
+        $filesystem->copyDirectory(__DIR__.'/../../../data/utils/js', resource_path('js'));
 
-        $fileSystem->ensureDirectoryExists(resource_path('sass'));
-        $fileSystem->copyDirectory(__DIR__.'/../../../data/utils/sass', resource_path('sass'));
+        $filesystem->ensureDirectoryExists(resource_path('sass'));
+        $filesystem->copyDirectory(__DIR__.'/../../../data/utils/sass', resource_path('sass'));
 
-        //$fileSystem->ensureDirectoryExists(resource_path('utils'));
+        //$filesystem->ensureDirectoryExists(resource_path('utils'));
 
         $laravelBootstrapJsPath = resource_path('js/bootstrap.js');
 
-        if ($fileSystem->exists($laravelBootstrapJsPath)) {
-            $fileSystem->append($laravelBootstrapJsPath, "
+        if ($filesystem->exists($laravelBootstrapJsPath)) {
+            $filesystem->append($laravelBootstrapJsPath, "
             
 import * as bootstrap from 'bootstrap';
 window.bootstrap = bootstrap;
@@ -47,14 +47,14 @@ window.utils = utils;
 
         $viteFilePath = base_path('vite.config.js');
 
-        if ($fileSystem->exists($viteFilePath)) {
-            $data = $fileSystem->get($viteFilePath);
+        if ($filesystem->exists($viteFilePath)) {
+            $data = $filesystem->get($viteFilePath);
 
             if (mb_stripos($data, 'resources/css/app.css') !== false) {
                 $data = preg_replace('@resources/css/app.css@', 'resources/sass/app.scss', $data);
 
                 if (!is_null($data)) {
-                    $fileSystem->put($viteFilePath, $data);
+                    $filesystem->put($viteFilePath, $data);
                 }
             }
         }
@@ -104,5 +104,7 @@ window.utils = utils;
         ];
 
         $this->updateEnvFileOrAppend($targets);
+
+        $this->outLabelledSuccess('Fuzzy utils installed');
     }
 }

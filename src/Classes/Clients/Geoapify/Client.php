@@ -2,12 +2,16 @@
 
 declare(strict_types=1);
 
-namespace Fuzzy\Fzpkg\Classes\Clients;
+namespace Fuzzy\Fzpkg\Classes\Clients\Geoapify;
 
-use GuzzleHttp\Client;
+use GuzzleHttp\Client as GuzzleClient;
 use Illuminate\Support\Facades\Log;
+use Fuzzy\Fzpkg\Classes\Clients\Geoapify\Body\ForwardBatch;
+use Fuzzy\Fzpkg\Classes\Clients\Geoapify\Body\ReverseBatch;
+use Fuzzy\Fzpkg\Classes\Clients\Geoapify\Body\Avoid;
+use Psr\Http\Message\ResponseInterface;
 
-class Geoapify
+class Client
 {
     protected $apiKey;
     protected $httpClient;
@@ -17,9 +21,45 @@ class Geoapify
     public function __construct(string $apiKey)
     {
         $this->apiKey = $apiKey;
-        $this->httpClient = new Client();
+        $this->httpClient = new GuzzleClient();
 
         $this->apiHost = 'https://api.geoapify.com';
+    }
+
+    /**
+     * [Description for doRequest]
+     *
+     * @param string $method
+     * @param array $headers
+     * @param string $body
+     * 
+     * @return ResponseInterface
+     * 
+     * @throws GuzzleException
+     * 
+     */
+    protected function doRequest(string $method, string $url, array $headers = [], string $body = '') : ResponseInterface
+    {
+        $requestOptions = [
+            'curl' => [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_ENCODING => '',
+                CURLOPT_MAXREDIRS => 10,
+                CURLOPT_TIMEOUT => 0,
+                CURLOPT_FOLLOWLOCATION => true,
+                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1
+            ]
+        ];
+
+        if (!empty($headers)) {
+            $requestOptions['headers'] = $headers;
+        }
+
+        if (!empty($body)) {
+            $requestOptions['body'] = $body;
+        }
+
+        return $this->httpClient->request($method, $url, $requestOptions);
     }
 
     /**
@@ -54,23 +94,14 @@ class Geoapify
                 $value = rawurlencode($value);
             }
 
-            if (!is_null($value)) {
+            if (!is_null($value) && !empty($value)) {
                 $url .= '&' . $name . '=' . $value;
             }
         }
 
         Log::debug('URL: ' . $url, [__METHOD__]);
         
-        $response = $this->httpClient->request('GET', $url, [
-            'curl' => [
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_ENCODING => '',
-                CURLOPT_MAXREDIRS => 10,
-                CURLOPT_TIMEOUT => 0,
-                CURLOPT_FOLLOWLOCATION => true,
-                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1
-            ]
-        ]);
+        $response = $this->doRequest('GET', $url);
 
         return (string) $response->getBody();
     }
@@ -107,23 +138,14 @@ class Geoapify
                 $value = rawurlencode($value);
             }
 
-            if (!is_null($value)) {
+            if (!is_null($value) && !empty($value)) {
                 $url .= '&' . $name . '=' . $value;
             }
         }
 
         Log::debug('URL: ' . $url, [__METHOD__]);
         
-        $response = $this->httpClient->request('GET', $url, [
-            'curl' => [
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_ENCODING => '',
-                CURLOPT_MAXREDIRS => 10,
-                CURLOPT_TIMEOUT => 0,
-                CURLOPT_FOLLOWLOCATION => true,
-                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1
-            ]
-        ]);
+        $response = $response = $this->doRequest('GET', $url);
 
         return (string) $response->getBody();
     }
@@ -172,23 +194,14 @@ class Geoapify
                 $value = rawurlencode($value);
             }
 
-            if (!is_null($value)) {
+            if (!is_null($value) && !empty($value)) {
                 $url .= '&' . $name . '=' . $value;
             }
         }
 
         Log::debug('URL: ' . $url, [__METHOD__]);
         
-        $response = $this->httpClient->request('GET', $url, [
-            'curl' => [
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_ENCODING => '',
-                CURLOPT_MAXREDIRS => 10,
-                CURLOPT_TIMEOUT => 0,
-                CURLOPT_FOLLOWLOCATION => true,
-                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1
-            ]
-        ]);
+        $response = $this->doRequest('GET', $url);
 
         return (string) $response->getBody();
     }
@@ -219,23 +232,14 @@ class Geoapify
         foreach (array_keys($d) as $name) {
             $value = $d[$name];
 
-            if (!is_null($value)) {
+            if (!is_null($value) && !empty($value)) {
                 $url .= '&' . $name . '=' . $value;
             }
         }
 
         Log::debug('URL: ' . $url, [__METHOD__]);
         
-        $response = $this->httpClient->request('GET', $url, [
-            'curl' => [
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_ENCODING => '',
-                CURLOPT_MAXREDIRS => 10,
-                CURLOPT_TIMEOUT => 0,
-                CURLOPT_FOLLOWLOCATION => true,
-                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1
-            ]
-        ]);
+        $response = $this->doRequest('GET', $url);
 
         return (string) $response->getBody();
     }
@@ -256,23 +260,14 @@ class Geoapify
         foreach (array_keys($d) as $name) {
             $value = $d[$name];
 
-            if (!is_null($value)) {
+            if (!is_null($value) && !empty($value)) {
                 $url .= '&' . $name . '=' . $value;
             }
         }
 
         Log::debug('URL: ' . $url, [__METHOD__]);
         
-        $response = $this->httpClient->request('GET', $url, [
-            'curl' => [
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_ENCODING => '',
-                CURLOPT_MAXREDIRS => 10,
-                CURLOPT_TIMEOUT => 0,
-                CURLOPT_FOLLOWLOCATION => true,
-                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1
-            ]
-        ]);
+        $response = $this->doRequest('GET', $url);
 
         return (string) $response->getBody();
     }
@@ -280,6 +275,7 @@ class Geoapify
     /**
      * https://apidocs.geoapify.com/docs/geocoding/batch/#api
      * 
+     * @param array     $body
      * @param string    $type
      * @param string    $lang (default: en)
      * @param string    $filter
@@ -299,28 +295,15 @@ class Geoapify
         foreach (array_keys($d) as $name) {
             $value = $d[$name];
 
-            if (!is_null($value)) {
+            if (!is_null($value) && !empty($value)) {
                 $url .= '&' . $name . '=' . $value;
             }
         }
 
         Log::debug('URL: ' . $url, [__METHOD__]);
-        
-        $response = $this->httpClient->request('POST', $url, [
-            'headers' => [
-                'CONTENT-TYPE' => 'application/json'
-            ],
-            'body' => json_encode($body),
-            'curl' => [
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_ENCODING => '',
-                CURLOPT_MAXREDIRS => 10,
-                CURLOPT_TIMEOUT => 0,
-                CURLOPT_FOLLOWLOCATION => true,
-                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-            ]
-        ]);
 
+        $response = $this->doRequest('POST', $url, ['CONTENT-TYPE' => 'application/json'], json_encode($body));
+        
         return (string) $response->getBody();
     }
 
@@ -342,23 +325,14 @@ class Geoapify
         foreach (array_keys($d) as $name) {
             $value = $d[$name];
 
-            if (!is_null($value)) {
+            if (!is_null($value) && !empty($value)) {
                 $url .= '&' . $name . '=' . $value;
             }
         }
 
         Log::debug('URL: ' . $url, [__METHOD__]);
         
-        $response = $this->httpClient->request('GET', $url, [
-            'curl' => [
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_ENCODING => '',
-                CURLOPT_MAXREDIRS => 10,
-                CURLOPT_TIMEOUT => 0,
-                CURLOPT_FOLLOWLOCATION => true,
-                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-            ]
-        ]);
+        $response = $this->doRequest('GET', $url);
 
         return (string) $response->getBody();
     }
@@ -366,6 +340,7 @@ class Geoapify
     /**
      * https://apidocs.geoapify.com/docs/geocoding/batch/#api-reverse
      * 
+     * @param array     $body
      * @param string    $type
      * @param string    $lang (default: en)
      * 
@@ -381,29 +356,14 @@ class Geoapify
         foreach (array_keys($d) as $name) {
             $value = $d[$name];
 
-            if (!is_null($value)) {
+            if (!is_null($value) && !empty($value)) {
                 $url .= '&' . $name . '=' . $value;
             }
         }
 
-        //dd(json_encode($body));
-
         Log::debug('URL: ' . $url, [__METHOD__]);
-        
-        $response = $this->httpClient->request('POST', $url, [
-            'headers' => [
-                'CONTENT-TYPE' => 'application/json'
-            ],
-            'body' => json_encode($body),
-            'curl' => [
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_ENCODING => '',
-                CURLOPT_MAXREDIRS => 10,
-                CURLOPT_TIMEOUT => 0,
-                CURLOPT_FOLLOWLOCATION => true,
-                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-            ]
-        ]);
+
+        $response = $this->doRequest('POST', $url, ['CONTENT-TYPE' => 'application/json'], json_encode($body));
 
         return (string) $response->getBody();
     }
@@ -426,23 +386,14 @@ class Geoapify
         foreach (array_keys($d) as $name) {
             $value = $d[$name];
 
-            if (!is_null($value)) {
+            if (!is_null($value) && !empty($value)) {
                 $url .= '&' . $name . '=' . $value;
             }
         }
 
         Log::debug('URL: ' . $url, [__METHOD__]);
         
-        $response = $this->httpClient->request('GET', $url, [
-            'curl' => [
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_ENCODING => '',
-                CURLOPT_MAXREDIRS => 10,
-                CURLOPT_TIMEOUT => 0,
-                CURLOPT_FOLLOWLOCATION => true,
-                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-            ]
-        ]);
+        $response = $this->doRequest('GET', $url);
 
         return (string) $response->getBody();
     }
@@ -481,23 +432,14 @@ class Geoapify
         foreach (array_keys($d) as $name) {
             $value = $d[$name];
 
-            if (!is_null($value)) {
+            if (!is_null($value) && !empty($value)) {
                 $url .= '&' . $name . '=' . $value;
             }
         }
 
         Log::debug('URL: ' . $url, [__METHOD__]);
         
-        $response = $this->httpClient->request('GET', $url, [
-            'curl' => [
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_ENCODING => '',
-                CURLOPT_MAXREDIRS => 10,
-                CURLOPT_TIMEOUT => 0,
-                CURLOPT_FOLLOWLOCATION => true,
-                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-            ]
-        ]);
+        $response = $this->doRequest('GET', $url);
 
         return (string) $response->getBody();
     }
@@ -534,27 +476,14 @@ class Geoapify
         foreach (array_keys($d) as $name) {
             $value = $d[$name];
 
-            if (!is_null($value)) {
+            if (!is_null($value) && !empty($value)) {
                 $body[$name] = $value;
             }
         }
 
         Log::debug('URL: ' . $url, [__METHOD__]);
-        
-        $response = $this->httpClient->request('POST', $url, [
-            'headers' => [
-                'CONTENT-TYPE' => 'application/json'
-            ],
-            'body' => json_encode($body),
-            'curl' => [
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_ENCODING => '',
-                CURLOPT_MAXREDIRS => 10,
-                CURLOPT_TIMEOUT => 0,
-                CURLOPT_FOLLOWLOCATION => true,
-                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-            ]
-        ]);
+
+        $response = $this->doRequest('POST', $url, ['CONTENT-TYPE' => 'application/json'], json_encode($body));
 
         return (string) $response->getBody();
     }
@@ -579,28 +508,47 @@ class Geoapify
         foreach (array_keys($d) as $name) {
             $value = $d[$name];
 
-            if (!is_null($value)) {
+            if (!is_null($value) && !empty($value)) {
                 $body[$name] = $value;
             }
         }
 
         Log::debug('URL: ' . $url, [__METHOD__]);
-        
-        $response = $this->httpClient->request('POST', $url, [
-            'headers' => [
-                'CONTENT-TYPE' => 'application/json'
-            ],
-            'body' => json_encode($body),
-            'curl' => [
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_ENCODING => '',
-                CURLOPT_MAXREDIRS => 10,
-                CURLOPT_TIMEOUT => 0,
-                CURLOPT_FOLLOWLOCATION => true,
-                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-            ]
-        ]);
+
+        $response = $this->doRequest('POST', $url, ['CONTENT-TYPE' => 'application/json'], json_encode($body));
 
         return (string) $response->getBody();
     }
+
+    /**
+     * https://apidocs.geoapify.com/docs/map-matching
+     * 
+     * @param array[]   $waypoints
+     * @param string    $mode (default: drive)
+     * 
+     * @throws GuzzleException
+     */
+    /*public function mapMatching(array $waypoints = null, string $mode = null) : string
+    {
+        $url = $this->apiHost . '/v1/mapmatching?apiKey=' . $this->apiKey;
+
+        $d['waypoints'] = $waypoints ?? [];
+        $d['mode'] = $mode ?? 'drive';
+
+        $body = [];
+
+        foreach (array_keys($d) as $name) {
+            $value = $d[$name];
+
+            if (!is_null($value) && !empty($value)) {
+                $body[$name] = $value;
+            }
+        }
+
+        Log::debug('URL: ' . $url, [__METHOD__]);
+
+        $response = $this->doRequest('POST', $url, ['CONTENT-TYPE' => 'application/json'], json_encode($body));
+
+        return (string) $response->getBody();
+    }*/
 }

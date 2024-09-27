@@ -111,4 +111,42 @@ class Utils
     {
         return implode('\\', array_filter(array_filter((array)$pathParts), function($value) { return !empty($value) && is_string($value); }));
     }
+
+    public static function contentTypeFromExtension($filename) : string
+    {
+        $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+
+        switch ($extension)
+        {
+            case 'html':
+                $contentType = 'text/html';
+                break;
+
+            case 'json':
+                $contentType = 'application/json';
+                break;
+
+            case 'js':
+                $contentType = 'application/javascript';
+                break;
+
+            case 'css':
+                $contentType = 'text/css';
+                break;
+
+            case 'png':
+                $contentType = 'image/' . $extension;
+                break;
+
+            case 'map':
+                $contentType = 'plain/text';
+                break;
+
+            default:
+                $contentType = 'application/octet-stream';
+                break;
+        }
+
+        return $contentType;
+    }
 }

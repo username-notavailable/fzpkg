@@ -6,7 +6,7 @@ use Illuminate\Console\GeneratorCommand;
 
 class MakeLivewireFormCommand extends GeneratorCommand
 {
-    protected $signature = 'fz:make:livewire:form {name : Form name} {model : Model name}';
+    protected $signature = 'fz:make:livewire:form { name : Form name } { model : Model name }';
 
     protected $description = 'Create a new Livewire model form: $fillable and $attributes must be defined into the model';
 

@@ -128,32 +128,32 @@ class GpxFile
                 throw new \Exception('Invalid GPX file, "xsi:schemaLocation" not found');
             }
 
-            $this->version = (string)$this->__evaluate('string(/ns:gpx/@version)');
-            $this->creator = (string)$this->__evaluate('string(/ns:gpx/@creator)');
+            $this->version = (string)$this->evaluate('string(/ns:gpx/@version)');
+            $this->creator = (string)$this->evaluate('string(/ns:gpx/@creator)');
 
-            $nodes = $this->__query('/ns:gpx/ns:metadata');
+            $nodes = $this->query('/ns:gpx/ns:metadata');
 
             $this->metadata = $nodes->count() > 0 ? (new MetadataType())->loadFromXpath($this->xPath, $nodes[0]) : new MetadataType();
 
             $this->waypoints = [];
 
-            foreach ($this->__query('/ns:gpx/ns:wpt') as $node) {
+            foreach ($this->query('/ns:gpx/ns:wpt') as $node) {
                 $this->waypoints[] = (new WptType())->loadFromXpath($this->xPath, $node);
             }
 
             $this->routes = [];
 
-            foreach ($this->__query('/ns:gpx/ns:rte') as $node) {
+            foreach ($this->query('/ns:gpx/ns:rte') as $node) {
                 $this->routes[] = (new RteType())->loadFromXpath($this->xPath, $node);
             }
 
             $this->tracks = [];
 
-            foreach ($this->__query('/ns:gpx/ns:trk') as $node) {
+            foreach ($this->query('/ns:gpx/ns:trk') as $node) {
                 $this->tracks[] = (new TrkType())->loadFromXpath($this->xPath, $node);
             }
 
-            $nodes = $this->__query('/ns:gpx/ns:extensions');
+            $nodes = $this->query('/ns:gpx/ns:extensions');
 
             $this->extensions = $nodes->count() > 0 ? (new ExtensionsType())->loadFromXpath($this->xPath, $nodes[0]) : new ExtensionsType();
         }
@@ -200,9 +200,9 @@ class GpxFile
         file_put_contents($filename, '</gpx>', FILE_APPEND);
     }
 
-    public function searchWaypointByName(string $name) : ?WptType
+    public function searchWaypointsByName(string $name) : array
     {
-        return $this->__searchItemByName($this->waypoints, $name);
+        return $this->__searchItemsByName($this->waypoints, $name);
     }
 
     public function searchWaypointsBySymbol(string $symbol) : array
@@ -219,23 +219,26 @@ class GpxFile
         return $waypoints;
     }
 
-    public function searchRouteByName(string $name) : ?RteType
+    public function searchRoutesByName(string $name) : array
     {
-        return $this->__searchItemByName($this->routes, $name);
+        return $this->__searchItemsByName($this->routes, $name);
     }
 
-    public function searchRouteWaypointsBySymbol(string $routeName, string $symbol) : array
+    public function searchRoutesWaypointsByName(string $routeName, string $waypointName) : array
     {
         $waypoints = [];
 
-        $route = $this->searchRouteByName($routeName);
+        $routes = $this->searchRoutesByName($routeName);
 
-        if (!is_null($route)) {
-            $symbol = strtolower($symbol);
+        if (!empty($routes)) {
+            $waypointName = strtolower($waypointName);
         
-            foreach ($route->rtept as $waypoint) {
-                if (strtolower($waypoint->sym) === $symbol) {
-                    $waypoints[] = $waypoint;
+            foreach ($routes as $idx => $route) {
+                $waypoints[$idx] = [];
+                foreach ($route->rtept as $waypoint) {
+                    if (strtolower($waypoint->name) === $waypointName) {
+                        $waypoints[$idx][] = $waypoint;
+                    }
                 }
             }
         }
@@ -243,24 +246,93 @@ class GpxFile
         return $waypoints;
     }
 
-    public function searchTrackByName(string $name) : ?TrkType
-    {
-        return $this->__searchItemByName($this->tracks, $name);
-    }
-
-    public function searchTrackWaypointsBySymbol(string $trackName, string $symbol) : array
+    public function searchRoutesWaypointsBySymbol(string $routeName, string $symbol) : array
     {
         $waypoints = [];
 
-        $track = $this->searchTrackByName($trackName);
+        $routes = $this->searchRoutesByName($routeName);
 
-        if (!is_null($track)) {
+        if (!empty($routes)) {
             $symbol = strtolower($symbol);
         
-            foreach ($track->trkseg as $trackSegment) {
-                foreach ($trackSegment->trkpt as $waypoint) {
+            foreach ($routes as $idx => $route) {
+                $waypoints[$idx] = [];
+                foreach ($route->rtept as $waypoint) {
                     if (strtolower($waypoint->sym) === $symbol) {
-                        $waypoints[] = $waypoint;
+                        $waypoints[$idx][] = $waypoint;
+                    }
+                }
+            }
+        }
+
+        return $waypoints;
+    }
+
+    public function searchTracksByName(string $name) : array
+    {
+        return $this->__searchItemsByName($this->tracks, $name);
+    }
+
+    public function searchTracksSegmentsWaypoints(string $trackName) : array
+    {
+        $waypoints = [];
+
+        $tracks = $this->searchTracksByName($trackName);
+
+        if (!empty($tracks)) {
+            foreach ($tracks as $idx => $track) {
+                $waypoints[$idx] = [];
+                foreach ($track->trkseg as $trackSegment) {
+                    $waypoints[$idx][] = $trackSegment->trkpt;
+                }
+            }
+        }
+
+        return $waypoints;
+    }
+
+    public function searchTracksSegmentsWaypointsByName(string $trackName, string $waypointName) : array
+    {
+        $waypoints = [];
+
+        $tracks = $this->searchTracksByName($trackName);
+
+        if (!empty($tracks)) {
+            $waypointName = strtolower($waypointName);
+        
+            foreach ($tracks as $idx => $track) {
+                $waypoints[$idx] = [];
+                foreach ($track->trkseg as $idx2 => $trackSegment) {
+                    $waypoints[$idx][$idx2] = [];
+                    foreach ($trackSegment->trkpt as $waypoint) {
+                        if (strtolower($waypoint->name) === $waypointName) {
+                            $waypoints[$idx][$idx2][] = $waypoint;
+                        }
+                    }
+                }
+            }
+        }
+
+        return $waypoints;
+    }
+
+    public function searchTracksSegmentsWaypointsBySymbol(string $trackName, string $symbol) : array
+    {
+        $waypoints = [];
+
+        $tracks = $this->searchTracksByName($trackName);
+
+        if (!empty($tracks)) {
+            $symbol = strtolower($symbol);
+        
+            foreach ($tracks as $idx => $track) {
+                $waypoints[$idx] = [];
+                foreach ($track->trkseg as $idx2 => $trackSegment) {
+                    $waypoints[$idx][$idx2] = [];
+                    foreach ($trackSegment->trkpt as $waypoint) {
+                        if (strtolower($waypoint->sym) === $symbol) {
+                            $waypoints[$idx][$idx2][] = $waypoint;
+                        }
                     }
                 }
             }
@@ -277,7 +349,7 @@ class GpxFile
         return $this->xmlErrors;
     }
 
-    protected function __query(string $expression) : \DOMNodeList
+    protected function query(string $expression) : \DOMNodeList
     {
         if (empty($this->xPath)) {
             throw new \Exception('Gpx file not loaded');
@@ -286,7 +358,7 @@ class GpxFile
         return $this->xPath->query($expression);
     }
 
-    protected function __evaluate(string $expression) : mixed
+    protected function evaluate(string $expression) : mixed
     {
         if (empty($this->xPath)) {
             throw new \Exception('Gpx file not loaded');
@@ -295,16 +367,17 @@ class GpxFile
         return $this->xPath->evaluate($expression);
     }
 
-    private function __searchItemByName(array &$array, string $name) : mixed
+    private function __searchItemsByName(array &$array, string $name) : array
     {
+        $items = [];
         $name = strtolower($name);
 
         foreach ($array as $item) {
             if (strtolower($item->name) === $name) {
-                return $item;
+                $items[] = $item;
             }
         }
 
-        return null;
+        return $items;
     }
 }

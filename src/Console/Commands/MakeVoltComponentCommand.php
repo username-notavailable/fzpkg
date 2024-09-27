@@ -9,7 +9,7 @@ use Illuminate\Foundation\Inspiring;
 
 class MakeVoltComponentCommand extends GeneratorCommand
 {
-    protected $signature = 'fz:make:volt:component {name : Component name --class : Create a class based component }';
+    protected $signature = 'fz:make:volt:component { name : Component name } { --class : Create a class based component }';
 
     protected $description = 'Create a new Volt component';
 

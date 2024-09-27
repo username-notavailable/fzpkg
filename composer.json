@@ -1,11 +1,15 @@
 {
     "name": "fuzzy/fzpkg",
     "description": "File di utilità",
-    "type": "utils",
+    "type": "library",
     "require": {
         "php": "^8.2",
         "illuminate/support": "*",
-        "guzzlehttp/guzzle": "^7.9"
+        "guzzlehttp/guzzle": "^7.9",
+        "symfony/psr-http-message-bridge": "^7.1",
+        "nyholm/psr7": "^1.8",
+        "ilexn/swoole-convert-psr7": "^0.6.1",
+        "cebe/php-openapi": "^1.7"
     },
     "license": "MIT",
     "autoload": {
@@ -19,7 +23,6 @@
             "email": "viviani.demetrio82@gmail.com"
         }
     ],
-    "minimum-stability": "dev",
     "extra": {
         "laravel": {
             "providers": [
@@ -27,5 +30,7 @@
             ],
             "dont-discover": []
         }
-    }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
 }

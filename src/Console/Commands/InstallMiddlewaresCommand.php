@@ -14,12 +14,12 @@ final class InstallMiddlewaresCommand extends BaseCommand
 
     public function handle(): void
     {
-        $fileSystem = new Filesystem();
+        $filesystem = new Filesystem();
 
         $this->checkEnvFlag('FZ_MIDDLEWARES_INSTALLED', 'Fz stubs already installed');
 
-        $fileSystem->ensureDirectoryExists(app_path('Http/Middlewares'));
-        $fileSystem->copyDirectory(__DIR__.'/../../../data/middlewares', app_path('Http/Middlewares'));
+        $filesystem->ensureDirectoryExists(app_path('Http/Middlewares'));
+        $filesystem->copyDirectory(__DIR__.'/../../../data/middlewares', app_path('Http/Middlewares'));
 
         /* --- */
 
@@ -31,5 +31,7 @@ final class InstallMiddlewaresCommand extends BaseCommand
         ];
 
         $this->updateEnvFileOrAppend($targets);
+
+        $this->outLabelledSuccess('Fuzzy middlewares installed');
     }
 }

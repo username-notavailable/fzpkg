@@ -14,15 +14,15 @@ final class InstallEventsCommand extends BaseCommand
 
     public function handle(): void
     {
-        $fileSystem = new Filesystem();
+        $filesystem = new Filesystem();
 
         $this->checkEnvFlag('FZ_EVENTS_INSTALLED', 'Fz events already installed');
 
-        $fileSystem->ensureDirectoryExists(app_path('Events'));
-        $fileSystem->copyDirectory(__DIR__.'/../../../data/events', app_path('Events'));
+        $filesystem->ensureDirectoryExists(app_path('Events'));
+        $filesystem->copyDirectory(__DIR__.'/../../../data/events', app_path('Events'));
 
-        $fileSystem->ensureDirectoryExists(app_path('Listeners'));
-        $fileSystem->copyDirectory(__DIR__.'/../../../data/listeners', app_path('Listeners'));
+        $filesystem->ensureDirectoryExists(app_path('Listeners'));
+        $filesystem->copyDirectory(__DIR__.'/../../../data/listeners', app_path('Listeners'));
 
         /* --- */
 
@@ -66,5 +66,7 @@ final class InstallEventsCommand extends BaseCommand
         ];
 
         $this->updateEnvFileOrAppend($targets);
+
+        $this->outLabelledSuccess('Fuzzy events installed');
     }
 }

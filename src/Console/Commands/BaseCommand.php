@@ -12,8 +12,18 @@ use Illuminate\Support\Facades\Log;
 
 class BaseCommand extends Command
 {
-    protected $logOutText = true;
-    protected $logOutLabelledText = true;
+    protected $logOutText = false;
+    protected $logOutLabelledText = false;
+
+    protected function disableOutLogs() : void
+    {
+        $this->logOutText = $this->logOutLabelledText = false;
+    }
+
+    protected function enableOutLogs() : void
+    {
+        $this->logOutText = $this->logOutLabelledText = true;
+    }
 
     protected function outError(string $message, $verbosity = null) : void
     {
@@ -147,12 +157,12 @@ class BaseCommand extends Command
      */
     protected function checkEnvFlag(string $flagName, string $errorMessage) : void
     {
-        $fileSystem = new Filesystem();
+        $filesystem = new Filesystem();
 
         $envFilePath = base_path('.env');
 
-        if ($fileSystem->exists($envFilePath)) {
-            $data = $fileSystem->get($envFilePath);
+        if ($filesystem->exists($envFilePath)) {
+            $data = $filesystem->get($envFilePath);
 
             if (mb_stripos($data, $flagName) !== false) {
                 $alreadyInstalled = env($flagName);
@@ -181,18 +191,18 @@ class BaseCommand extends Command
      */
     protected function updateEnvFile(array $targets) : void
     {
-        $fileSystem = new Filesystem();
+        $filesystem = new Filesystem();
 
         $envFilePath = base_path('.env');
 
-        $data = $fileSystem->get($envFilePath);
+        $data = $filesystem->get($envFilePath);
 
         foreach ($targets as $search => $fromTo) {
             if (mb_stripos($data, $search) !== false) {
                 $data = preg_replace('@' . $fromTo['from'] . '@m', $fromTo['to'], $data);
 
                 if (!is_null($data)) {
-                    $fileSystem->put($envFilePath, $data);
+                    $filesystem->put($envFilePath, $data);
                 }
             }
         }
@@ -207,23 +217,23 @@ class BaseCommand extends Command
      */
     protected function updateEnvFileOrAppend(array $targets) : void
     {
-        $fileSystem = new Filesystem();
+        $filesystem = new Filesystem();
 
         $envFilePath = base_path('.env');
 
-        $data = $fileSystem->get($envFilePath);
+        $data = $filesystem->get($envFilePath);
 
         foreach ($targets as $search => $fromTo) {
             if (mb_stripos($data, $search) !== false) {
                 $data = preg_replace('@' . $fromTo['from'] . '@m', $fromTo['to'], $data);
     
                 if (!is_null($data)) {
-                    $fileSystem->put($envFilePath, $data);
+                    $filesystem->put($envFilePath, $data);
                 }
             }
             else {
                 $data .= (PHP_EOL . $fromTo['to']);
-                $fileSystem->put($envFilePath, $data);
+                $filesystem->put($envFilePath, $data);
             }
         }
     }

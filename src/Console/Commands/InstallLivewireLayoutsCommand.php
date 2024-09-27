@@ -14,12 +14,12 @@ final class InstallLivewireLayoutsCommand extends BaseCommand
 
     public function handle(): void
     {
-        $fileSystem = new Filesystem();
+        $filesystem = new Filesystem();
 
         $this->checkEnvFlag('FZ_LIVEWIRE_LAYOUTS_INSTALLED', 'Fz livewire layouts already installed');
 
-        $fileSystem->ensureDirectoryExists(resource_path('views/components/layouts'));
-        $fileSystem->copyDirectory(__DIR__.'/../../../data/livewire/components/layouts', resource_path('views/components/layouts'));
+        $filesystem->ensureDirectoryExists(resource_path('views/components/layouts'));
+        $filesystem->copyDirectory(__DIR__.'/../../../data/livewire/components/layouts', resource_path('views/components/layouts'));
 
         /* --- */
 
@@ -31,5 +31,7 @@ final class InstallLivewireLayoutsCommand extends BaseCommand
         ];
 
         $this->updateEnvFileOrAppend($targets);
+
+        $this->outLabelledSuccess('Livewire layouts installed');
     }
 }
