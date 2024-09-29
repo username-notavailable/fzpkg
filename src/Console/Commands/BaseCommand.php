@@ -155,11 +155,11 @@ class BaseCommand extends Command
      * @param  string $errorMessage
      * @return void
      */
-    protected function checkEnvFlag(string $flagName, string $errorMessage) : void
+    protected function checkEnvFlag(string $flagName, string $errorMessage, ?string $envFilePath = null) : void
     {
         $filesystem = new Filesystem();
 
-        $envFilePath = base_path('.env');
+        $envFilePath = $envFilePath ?: base_path('.env');
 
         if ($filesystem->exists($envFilePath)) {
             $data = $filesystem->get($envFilePath);
@@ -189,11 +189,11 @@ class BaseCommand extends Command
      * @param  array $targets [<CONF_NAME>]['from'] = old value, [<CONF_NAME>]['to'] = new value
      * @return void
      */
-    protected function updateEnvFile(array $targets) : void
+    protected function updateEnvFile(array $targets, ?string $envFilePath = null) : void
     {
         $filesystem = new Filesystem();
 
-        $envFilePath = base_path('.env');
+        $envFilePath = $envFilePath ?: base_path('.env');
 
         $data = $filesystem->get($envFilePath);
 
@@ -215,11 +215,11 @@ class BaseCommand extends Command
      * @param  array $targets [<CONF_NAME>]['from'] = old value, [<CONF_NAME>]['to'] = new value
      * @return void
      */
-    protected function updateEnvFileOrAppend(array $targets) : void
+    protected function updateEnvFileOrAppend(array $targets, ?string $envFilePath = null) : void
     {
         $filesystem = new Filesystem();
 
-        $envFilePath = base_path('.env');
+        $envFilePath = $envFilePath ?: base_path('.env');
 
         $data = $filesystem->get($envFilePath);
 

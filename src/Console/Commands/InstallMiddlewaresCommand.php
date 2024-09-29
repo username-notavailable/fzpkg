@@ -18,8 +18,8 @@ final class InstallMiddlewaresCommand extends BaseCommand
 
         $this->checkEnvFlag('FZ_MIDDLEWARES_INSTALLED', 'Fz stubs already installed');
 
-        $filesystem->ensureDirectoryExists(app_path('Http/Middlewares'));
-        $filesystem->copyDirectory(__DIR__.'/../../../data/middlewares', app_path('Http/Middlewares'));
+        $filesystem->ensureDirectoryExists(app_path('Http/Middleware'));
+        $filesystem->copyDirectory(__DIR__.'/../../../data/middlewares', app_path('Http/Middleware'));
 
         /* --- */
 

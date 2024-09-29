@@ -3,9 +3,11 @@
 namespace App\Http\SweetApi\{{ api_name }};
 
 use Fuzzy\Fzpkg\Classes\Utils\Utils;
-use Fuzzy\Fzpkg\Classes\SweetApi\Attributes\Router\{RoutePrefix, Route, Get};
+use Fuzzy\Fzpkg\Classes\SweetApi\Attributes\Router\{RoutePrefix, Get, Route, Info, Response, Tag, WithParam};
 use cebe\openapi\Writer;
-use cebe\openapi\spec\{OpenApi, Info, Paths, PathItem, Operation, Responses, Response};
+use cebe\openapi\spec\OpenApi; 
+use cebe\openapi\spec\PathItem as OpenApiPathItem;
+use cebe\openapi\spec\Tag as OpenApiTag;
 use ReflectionClass;
 use Throwable;
 
@@ -48,18 +50,6 @@ class SwaggerEndpoints extends Endpoints
             $apiDirectoryPath = app_path('Http/SweetApi/' . $apiName);
             $apiPrefix = '/' . strtolower($apiName);
 
-            $openapi = new OpenApi([
-                'swagger' => '2.0',
-                'info' => new Info([
-                    'title' => 'SweetAPI "' . $apiName . '"',
-                    'version' => '1.0.0',
-                ]),
-                'host' => $urlParts['host'] . ($urlParts['port'] === 80 ? '' : ':' . $urlParts['port']),
-                'basePath' => $apiPrefix,
-                'schemes' => $schemes,
-                'paths' => new Paths([])
-            ]);
-
             $classes = glob($apiDirectoryPath . DIRECTORY_SEPARATOR . '?*Endpoints.php');
 
             if (count($classes) > 0) {
@@ -77,6 +67,7 @@ class SwaggerEndpoints extends Endpoints
                     $endpointsStruct[$idx] = [];
                     $endpointsStruct[$idx]['prefix'] = '';
                     $endpointsStruct[$idx]['controller'] = $className;
+                    $endpointsStruct[$idx]['tag'] = ['name' => '', 'description' => '', 'externalDocs' => ['url' => '', 'description' => '']];
                     $endpointsStruct[$idx]['methods'] = [];
 
                     $reflectionClass = new ReflectionClass('\\' . $namespace);
@@ -87,6 +78,10 @@ class SwaggerEndpoints extends Endpoints
                         if ($attributeInstance instanceof RoutePrefix) {
                             $endpointsStruct[$idx]['prefix'] = $attributeInstance->path;
                         }
+
+                        if ($attributeInstance instanceof Info) {
+                            $endpointsStruct[$idx]['tag'] = ['name' => $className, 'description' => $attributeInstance->description, 'externalDocs' => ['url' => $attributeInstance->link, 'description' => $attributeInstance->linkDescription]];
+                        }
                     }
 
                     foreach ($reflectionClass->getMethods() as $method) {
@@ -94,6 +89,9 @@ class SwaggerEndpoints extends Endpoints
                         $routeVerbs = null;
                         $routePath = null;
                         $routeName = null;
+                        $routeResponses = [];
+                        $routeTags = [];
+                        $routeParams = [];
 
                         foreach ($method->getAttributes() as $attribute) {
                             $attributeInstance = $attribute->newInstance();
@@ -102,6 +100,10 @@ class SwaggerEndpoints extends Endpoints
                                 $routeVerbs = strtolower($attributeInstance->verbs);
                                 $routePath = $attributeInstance->path;
                                 $routeName = $attributeInstance->name;
+                                $routeConsumes = $attributeInstance->consumes;
+                                $routeSummary = $attributeInstance->summary;
+                                $routeDescription = $attributeInstance->description;
+                                $routeDeprecated = $attributeInstance->deprecated;
                                 
                                 if ($routeVerbs === '*') {
                                     $routeVerbs = 'any';
@@ -110,22 +112,68 @@ class SwaggerEndpoints extends Endpoints
                                     $routeVerbs = explode('|', $routeVerbs);
                                 }
                             }
+
+                            if ($attributeInstance instanceof Response) {
+                                $routeResponses[$attributeInstance->statusCode] = ['content' => $attributeInstance->content, 'description' => $attributeInstance->description];
+                            }
+
+                            if ($attributeInstance instanceof Tag) {
+                                $routeTags[] = $attributeInstance->name;
+                            }
+
+                            if ($attributeInstance instanceof WithParam) {
+                                $routeParams[] = ['name' => $attributeInstance->name, 'in' => $attributeInstance->in, 'description' => $attributeInstance->description, 'required' => $attributeInstance->required, 'deprecated' => $attributeInstance->deprecated, 'allowEmptyValue' => $attributeInstance->allowEmptyValue, 'example' => $attributeInstance->example];
+                            }
                         }
 
                         if (!is_null($routeVerbs)) {
-                            $endpointsStruct[$idx]['methods'][] = ['methodName' => $methodName, 'routeVerbs' => $routeVerbs, 'routePath' => $routePath, 'routeName' => $routeName];
+                            $endpointsStruct[$idx]['methods'][] = ['methodName' => $methodName, 'routeVerbs' => $routeVerbs, 'routePath' => $routePath, 'routeName' => $routeName, 'routeSummary' => $routeSummary, 'routeDescription' => $routeDescription, 'routeDeprecated' => $routeDeprecated, 'routeResponses' => $routeResponses, 'routeTags' => $routeTags, 'routeConsumes' => $routeConsumes, 'routeParams' => $routeParams];
                         }
                     }
                 }
 
+                $info = [
+                    'title' => env('SWEETAPI_TITLE', 'SweetAPI "' . $apiName . '"'),
+                    'summary' => env('SWEETAPI_SUMMARY', ''),
+                    'description' => env('SWEETAPI_DESCRIPTION', ''),
+                    'termsOfService' => env('SWEETAPI_TERMS_OF_SERVICE', ''),
+                    'contact' => [
+                        'name' => env('SWEETAPI_CONTACT_NAME', ''),
+                        'url' => env('SWEETAPI_CONTACT_URL', ''),
+                        'email' => env('SWEETAPI_CONTACT_EMAIL', '')
+                    ],
+                    'license' => [
+                        'name' => env('SWEETAPI_LICENSE_NAME', ''),
+                        'identifier' => env('SWEETAPI_LICENSE_SPDX', ''),
+                        'url' => env('SWEETAPI_LICENSE_URL', '')
+                    ],
+                    'version' => env('SWEETAPI_OPEN_API_DOC_VERSION', '1.0.0'),
+                ];
+
+                $openapi = [
+                    'swagger' => '2.0',
+                    //'openapi' => '3.0.2',
+                    'info' => $info,
+                    'host' => $urlParts['host'] . ($urlParts['port'] === 80 ? '' : ':' . $urlParts['port']),
+                    'basePath' => $apiPrefix,
+                    'tags' => [],
+                    'schemes' => $schemes,
+                    'paths' => [],
+                    'externalDocs' => [
+                        'url' => env('SWEETAPI_EXT_DOC_URL', ''),
+                        'description' => env('SWEETAPI_EXT_DESCRIPTION', '')
+                    ]
+                ];
+
                 $endpointsStruct = array_reverse($endpointsStruct);
 
                 foreach ($endpointsStruct as $idx => $controllerData) {
+                    $openapi['tags'][] = new OpenApiTag($controllerData['tag']);
                     foreach ($controllerData['methods'] as $methodData) {
                         $pathName = '';
 
-                        if (trim($endpointsStruct[$idx]['prefix'], '/') !== '') {
-                            $pathName .= '/' . trim($endpointsStruct[$idx]['prefix'], '/') . '/';
+                        if (trim($controllerData['prefix'], '/') !== '') {
+                            $pathName .= '/' . trim($controllerData['prefix'], '/') . '/';
                         }
 
                         $pathName .= trim($methodData['routePath'], ' /');
@@ -137,33 +185,50 @@ class SwaggerEndpoints extends Endpoints
                             $verbs = $methodData['routeVerbs'];
                         }
 
-                        $pathItemData = [
-                            'summary' => 'endpoint name "' . $methodData['routeName'] . '"',
-                            'description' => '',
-                        ];
+                        $pathItemData = [];
+                        array_unshift($methodData['routeTags'], $controllerData['controller']);
 
-                        foreach ($verbs as $verb) {
-                            $pathItemData[$verb] = new Operation([
-                                'operationId' => $methodData['routeName'] . '_' . $verb, //### FIXME: Ma se è il nome della rotta???
-                                'tags' => [
-                                    $endpointsStruct[$idx]['controller']
-                                ],
-                                'responses' => new Responses([
-                                    '200' => New Response([
-                                        'content' => 'text/html'
-                                    ])
-                                ])
-                            ]);
+                        $produces = [];
+
+                        foreach ($methodData['routeResponses'] as $statusCode => $data) {
+                            $produces[strtolower($data['content'])] = true;
                         }
 
-                        $openapi->paths->addPath($pathName, new PathItem($pathItemData));
+                        if (empty($produces)) {
+                            $produces['string'] = true;
+                        }
+
+                        if (count($verbs) > 1) {
+                            $pathItemData['parameters'] = $methodData['routeParams'];
+                        }
+
+                        foreach ($verbs as $verb) {
+                            $pathItemData[$verb] = [
+                                'summary' => $methodData['routeSummary'],
+                                'description' => $methodData['routeDescription'],
+                                'operationId' => $methodData['routeName'] . '_###_' . $verb, //### FIXME: Ma se è il nome della rotta???
+                                'consumes' => $methodData['routeConsumes'],
+                                'produces' => array_keys($produces),
+                                'tags' => $methodData['routeTags'],
+                                'deprecated' => $methodData['routeDeprecated'],
+                                'responses' => $methodData['routeResponses']
+                            ];
+
+                            if (count($verbs) === 1) {
+                                $pathItemData[$verb]['parameters'] = $methodData['routeParams'];
+                            }
+                        }
+
+                        $openapi['paths'][$pathName] = new OpenApiPathItem($pathItemData);
                     }
                 }
+
+                $cebe = new OpenApi($openapi);
+
+                $json = Writer::writeToJson($cebe, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+
+                file_put_contents(Utils::makeFilePath(__DIR__, 'bootstrap', 'swagger.json'), $json);
             }
-
-            $json = Writer::writeToJson($openapi, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-
-            file_put_contents(Utils::makeFilePath(__DIR__, 'bootstrap', 'swagger.json'), $json);
         }
         catch (Throwable $e) {
             echo $e->getMessage();

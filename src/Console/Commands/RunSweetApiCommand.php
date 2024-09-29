@@ -9,7 +9,11 @@ use Fuzzy\Fzpkg\Classes\SweetApi\Attributes\Router\{RoutePrefix, Route, BaseMidd
 use Illuminate\Http\Request as LaravelRequest;
 use Illuminate\Http\Response as LaravelResponse;
 use Illuminate\Contracts\Http\Kernel as HttpKernelContract;
+use Illuminate\Support\Facades\View;
+use Illuminate\Filesystem\Filesystem;
+use Illuminate\View\FileViewFinder;
 
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Bridge\PsrHttpMessage\Factory\HttpFoundationFactory;
 use Symfony\Bridge\PsrHttpMessage\Factory\PsrHttpFactory;
 
@@ -22,6 +26,8 @@ use OpenSwoole\Http\Response as OpenSwooleResponse;
 use Ilex\SwoolePsr7\SwooleServerRequestConverter;
 use Ilex\SwoolePsr7\SwooleResponseConverter;
 
+use Fruitcake\Cors\CorsService;
+
 use ReflectionClass;
 use Throwable;
 
@@ -29,7 +35,7 @@ use Throwable;
 
 final class RunSweetApiCommand extends BaseCommand
 {
-    protected $signature = 'fz:run:sweetapi { apiName : SweetApi Folder (case sensitive) } { --host=127.0.0.1 : Host address } { --port=8080 : Port number } { --logTz=Europe/Rome : Log timezone } { --disableSwagger : Disable Swagger docs } { --workerNum=4 : OpenSwoole worker number } { --taskWorkerNum=4 : OpenSwoole task worker number } { --backlog=128 : OpenSwoole TCP backlog connection number }';
+    protected $signature = 'fz:run:sweetapi { apiName : SweetApi Folder (case sensitive) } { --host=127.0.0.1 : Host address } { --port=8080 : Port number } { --logTz=Europe/Rome : Log timezone } { --disableSwagger : Disable Swagger docs } { --httpCompressionLevel=1 : Default compression level [1-9] } { --workerNum=4 : OpenSwoole worker number } { --taskWorkerNum=4 : OpenSwoole task worker number } { --backlog=128 : OpenSwoole TCP backlog connection number } { --disableCors : Disable CORS }';
 
     protected $description = 'Avvia un HTTP server SweetAPI';
 
@@ -48,14 +54,17 @@ final class RunSweetApiCommand extends BaseCommand
             }
         }
 
-        try {
+        try 
+        {
             $apiName = $this->argument('apiName');
             $host = $this->option('host');
             $port = $this->option('port');
             $logTz = $this->option('logTz');
+            $allowCors = !$this->option('disableCors');
 
             $apiDirectoryPath = app_path('Http/SweetApi/' . $apiName);
             $apiBootstrapDirectoryPath = Utils::makeFilePath($apiDirectoryPath, 'bootstrap');
+            $apiViewDirecoryPath = Utils::makeFilePath($apiDirectoryPath, 'views');
 
             if (!file_exists($apiDirectoryPath)) {
                 $this->fail('SweetAPI "' . $this->argument('apiName') . '" not exists (directory "' . $apiDirectoryPath . '" not found)');
@@ -65,6 +74,7 @@ final class RunSweetApiCommand extends BaseCommand
             }
 
             $builder = require_once Utils::makeFilePath($apiBootstrapDirectoryPath, 'builder.php');
+            $apiCorsConfig = require_once Utils::makeFilePath($apiBootstrapDirectoryPath, 'cors.php');
 
             $psr17Factory = new Psr17Factory();
             $serverRequestFactory = new SwooleServerRequestConverter($psr17Factory, $psr17Factory, $psr17Factory, $psr17Factory);
@@ -75,6 +85,7 @@ final class RunSweetApiCommand extends BaseCommand
                 'document_root' => Utils::makeDirectoryPath($apiBootstrapDirectoryPath, 'swagger'),
                 'enable_static_handler' => true,
                 'http_compression' => true,
+                'http_compression_level' => $this->option('httpCompressionLevel'),
                 'worker_num' => $this->option('workerNum'),             // The number of worker processes to start
                 'task_worker_num' => $this->option('taskWorkerNum'),    // The amount of task workers to start
                 'backlog' => $this->option('backlog'),                  // TCP backlog connection number
@@ -84,21 +95,19 @@ final class RunSweetApiCommand extends BaseCommand
                 $this->outText("### SweetAPI: $apiName -- running at http://$host:$port (started at " . (new \DateTime('now', new \DateTimeZone($logTz)))->format('Y-m-d H:i:s') . ") ###\n");
             });
 
-            $server->on('task', function (OpenSwooleServer $server, $task_id, $reactorId, $data)
-            {
+            $server->on('task', function (OpenSwooleServer $server, $task_id, $reactorId, $data) {
                 //echo "Task Worker Process received data";
 
                 //echo "#{$server->worker_id}\tonTask: [PID={$server->worker_pid}]: task_id=$task_id, data_len=" . strlen($data) . "." . PHP_EOL;
 
-                $server->finish($data);
+                //$server->finish($data);
             });
 
-            /*$server->on('finish', function (OpenSwooleServer $server, $task_id, $data)
-            {
+            /*$server->on('finish', function (OpenSwooleServer $server, $task_id, $data) {
                 echo "Task#$task_id finished, data_len=" . strlen($data) . PHP_EOL;
             });*/
 
-            $server->on('request', function(OpenSwooleRequest $OpenSwooleRequest, OpenSwooleResponse $OpenSwooleResponse) use ($builder, $apiBootstrapDirectoryPath, $apiName, $logTz, $serverRequestFactory, $psr17Factory) {
+            $server->on('request', function(OpenSwooleRequest $OpenSwooleRequest, OpenSwooleResponse $OpenSwooleResponse) use ($apiName, $builder, $apiBootstrapDirectoryPath, $apiViewDirecoryPath, $allowCors, $apiCorsConfig, $logTz, $serverRequestFactory, $psr17Factory) {
                 $requestLog = '[' . $apiName . '][' . (new \DateTime('now', new \DateTimeZone($logTz)))->format('Y-m-d H:i:s') . '][' . strtoupper($OpenSwooleRequest->server['request_method']) . '] ' . $OpenSwooleRequest->server['request_uri'];
 
                 $this->outText($requestLog);
@@ -107,17 +116,48 @@ final class RunSweetApiCommand extends BaseCommand
                 try 
                 {
                     $app = $builder->create();
-
-                    if (file_exists(Utils::makeFilePath($apiBootstrapDirectoryPath, '.env'))) {
-                        $app->useEnvironmentPath($apiBootstrapDirectoryPath);
-                    }
+                    $app->useEnvironmentPath($apiBootstrapDirectoryPath);
+                    
+                    View::setFinder(new FileViewFinder(new Filesystem(), [$apiViewDirecoryPath]));
 
                     $psrServerRequest = $serverRequestFactory->createFromSwoole($OpenSwooleRequest);
                 
                     $httpFoundationFactory = new HttpFoundationFactory();
                     $symfonyRequest = $httpFoundationFactory->createRequest($psrServerRequest);
 
-                    $symfonyResponse = $app->handle($symfonyRequest);
+                    $cors = new CorsService($apiCorsConfig);
+
+                    if ($cors->isCorsRequest($symfonyRequest)) {
+                        if ($allowCors) {
+                            if ($cors->isPreflightRequest($symfonyRequest)) {
+                                $symfonyResponse = $cors->handlePreflightRequest($symfonyRequest);
+
+                                $cors->varyHeader($symfonyResponse, 'Access-Control-Request-Method');
+                            }
+                            else {
+                                if ($cors->isOriginAllowed($symfonyRequest)) {
+                                    $symfonyResponse = $app->handle($symfonyRequest);
+
+                                    if ($symfonyRequest->getMethod() === 'OPTIONS') {
+                                        $cors->varyHeader($symfonyResponse, 'Access-Control-Request-Method');
+                                    }
+
+                                    if (!$symfonyResponse->headers->has('Access-Control-Allow-Origin')) {
+                                        $symfonyResponse = $cors->addActualRequestHeaders($symfonyResponse, $symfonyRequest);
+                                    }
+                                }
+                                else {
+                                    $symfonyResponse = new Response(null, 403);
+                                }
+                            }
+                        }
+                        else {
+                            $symfonyResponse = new Response(null, 403);
+                        }
+                    }
+                    else {
+                        $symfonyResponse = $app->handle($symfonyRequest);
+                    }
 
                     $psrHttpFactory = new PsrHttpFactory($psr17Factory, $psr17Factory, $psr17Factory, $psr17Factory);
                             
