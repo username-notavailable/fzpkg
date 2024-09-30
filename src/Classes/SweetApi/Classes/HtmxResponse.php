@@ -8,6 +8,25 @@ use Illuminate\Http\Response;
 
 class HtmxResponse extends Response
 {
+    public function __construct($content = '', $status = 200, array $headers = [])
+    {
+        parent::__construct($content, $status, $headers);
+    }
+
+    /**
+     * Return a new response from the application.
+     *
+     * @param  \Illuminate\Contracts\View\View|string|array|null  $content
+     * @param  int  $status
+     * @param  array  $headers
+     * 
+     * @return HtmxResponse
+     */
+    public static function page($content = null, $status = 200, array $headers = []) : self
+    {
+        return new self($content, $status, $headers);
+    }
+
     public function setHxLocation(string $location) : self
     {
         $this->headers->set('HX-Location', $location);

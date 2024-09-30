@@ -9,11 +9,7 @@ use Fuzzy\Fzpkg\Classes\SweetApi\Attributes\Router\{RoutePrefix, Route, BaseMidd
 use Illuminate\Http\Request as LaravelRequest;
 use Illuminate\Http\Response as LaravelResponse;
 use Illuminate\Contracts\Http\Kernel as HttpKernelContract;
-use Illuminate\Support\Facades\View;
-use Illuminate\Filesystem\Filesystem;
-use Illuminate\View\FileViewFinder;
 
-use Symfony\Component\HttpFoundation\Response;
 use Symfony\Bridge\PsrHttpMessage\Factory\HttpFoundationFactory;
 use Symfony\Bridge\PsrHttpMessage\Factory\PsrHttpFactory;
 
@@ -26,8 +22,6 @@ use OpenSwoole\Http\Response as OpenSwooleResponse;
 use Ilex\SwoolePsr7\SwooleServerRequestConverter;
 use Ilex\SwoolePsr7\SwooleResponseConverter;
 
-use Fruitcake\Cors\CorsService;
-
 use ReflectionClass;
 use Throwable;
 
@@ -35,7 +29,7 @@ use Throwable;
 
 final class RunSweetApiCommand extends BaseCommand
 {
-    protected $signature = 'fz:run:sweetapi { apiName : SweetApi Folder (case sensitive) } { --host=127.0.0.1 : Host address } { --port=8080 : Port number } { --logTz=Europe/Rome : Log timezone } { --disableSwagger : Disable Swagger docs } { --httpCompressionLevel=1 : Default compression level [1-9] } { --workerNum=4 : OpenSwoole worker number } { --taskWorkerNum=4 : OpenSwoole task worker number } { --backlog=128 : OpenSwoole TCP backlog connection number } { --disableCors : Disable CORS }';
+    protected $signature = 'fz:run:sweetapi { apiName : SweetApi Folder (case sensitive) } { --logTz=Europe/Rome : Log timezone } { --disableSwagger : Disable Swagger docs } { --httpCompressionLevel=1 : Default compression level [1-9] } { --workerNum=4 : OpenSwoole worker number } { --taskWorkerNum=4 : OpenSwoole task worker number } { --backlog=128 : OpenSwoole TCP backlog connection number }';
 
     protected $description = 'Avvia un HTTP server SweetAPI';
 
@@ -57,24 +51,37 @@ final class RunSweetApiCommand extends BaseCommand
         try 
         {
             $apiName = $this->argument('apiName');
-            $host = $this->option('host');
-            $port = $this->option('port');
             $logTz = $this->option('logTz');
-            $allowCors = !$this->option('disableCors');
+            $host = null;
+            $port = null;
 
             $apiDirectoryPath = app_path('Http/SweetApi/' . $apiName);
-            $apiBootstrapDirectoryPath = Utils::makeFilePath($apiDirectoryPath, 'bootstrap');
-            $apiViewDirecoryPath = Utils::makeFilePath($apiDirectoryPath, 'views');
+            $apiRuntimeDirectoryPath = Utils::makeDirectoryPath($apiDirectoryPath, 'runtime');
+            $sweetApiDirectoryPath = Utils::makeDirectoryPath($apiRuntimeDirectoryPath, 'sweetapi');
 
+            $envFilePath = Utils::makeFilePath($apiRuntimeDirectoryPath, '.env');
+            $match = [];
+
+            preg_match('@APP_URL=(.+)@m', file_get_contents($envFilePath), $match);
+
+            if (count($match) !== 2) {
+                throw new \InvalidArgumentException('Invalid APP_URL in .env');
+            }
+            else {
+                $urlParts = parse_url($match[1]);
+                
+                $host = $urlParts['scheme'] . '://' . $urlParts['host'];
+                $port = isset($urlParts['port']) ? $urlParts['port'] : 8080;
+            }
+            
             if (!file_exists($apiDirectoryPath)) {
                 $this->fail('SweetAPI "' . $this->argument('apiName') . '" not exists (directory "' . $apiDirectoryPath . '" not found)');
             }
             else {
-                $this->createRoutesFile($apiName, $apiDirectoryPath, Utils::makeFilePath($apiBootstrapDirectoryPath, 'routes.php'));
+                $this->createRoutesFile($apiName, $apiDirectoryPath, Utils::makeFilePath($apiRuntimeDirectoryPath, 'routes', 'api.php'));
             }
 
-            $builder = require_once Utils::makeFilePath($apiBootstrapDirectoryPath, 'builder.php');
-            $apiCorsConfig = require_once Utils::makeFilePath($apiBootstrapDirectoryPath, 'cors.php');
+            $builder = require_once Utils::makeFilePath($apiRuntimeDirectoryPath, 'bootstrap', 'builder.php');
 
             $psr17Factory = new Psr17Factory();
             $serverRequestFactory = new SwooleServerRequestConverter($psr17Factory, $psr17Factory, $psr17Factory, $psr17Factory);
@@ -82,7 +89,7 @@ final class RunSweetApiCommand extends BaseCommand
             $server = new OpenSwooleHttpServer($host, $port, OpenSwooleServer::POOL_MODE);
 
             $server->set([
-                'document_root' => Utils::makeDirectoryPath($apiBootstrapDirectoryPath, 'swagger'),
+                'document_root' => Utils::makeDirectoryPath($sweetApiDirectoryPath, 'swagger'),
                 'enable_static_handler' => true,
                 'http_compression' => true,
                 'http_compression_level' => $this->option('httpCompressionLevel'),
@@ -92,100 +99,65 @@ final class RunSweetApiCommand extends BaseCommand
             ]);
 
             $server->on('start', function($server) use ($apiName, $host, $port, $logTz) {
-                $this->outText("### SweetAPI: $apiName -- running at http://$host:$port (started at " . (new \DateTime('now', new \DateTimeZone($logTz)))->format('Y-m-d H:i:s') . ") ###\n");
+                $this->outText("### SweetAPI: $apiName -- running at $host:$port (started at " . (new \DateTime('now', new \DateTimeZone($logTz)))->format('Y-m-d H:i:s') . ") ###\n");
             });
 
-            $server->on('task', function (OpenSwooleServer $server, $task_id, $reactorId, $data) {
-                //echo "Task Worker Process received data";
-
-                //echo "#{$server->worker_id}\tonTask: [PID={$server->worker_pid}]: task_id=$task_id, data_len=" . strlen($data) . "." . PHP_EOL;
-
-                //$server->finish($data);
-            });
-
-            /*$server->on('finish', function (OpenSwooleServer $server, $task_id, $data) {
-                echo "Task#$task_id finished, data_len=" . strlen($data) . PHP_EOL;
-            });*/
-
-            $server->on('request', function(OpenSwooleRequest $OpenSwooleRequest, OpenSwooleResponse $OpenSwooleResponse) use ($apiName, $builder, $apiBootstrapDirectoryPath, $apiViewDirecoryPath, $allowCors, $apiCorsConfig, $logTz, $serverRequestFactory, $psr17Factory) {
-                $requestLog = '[' . $apiName . '][' . (new \DateTime('now', new \DateTimeZone($logTz)))->format('Y-m-d H:i:s') . '][' . strtoupper($OpenSwooleRequest->server['request_method']) . '] ' . $OpenSwooleRequest->server['request_uri'];
-
-                $this->outText($requestLog);
-                $sended = false;
-
-                try 
+            $server->on('task', function (OpenSwooleServer $server, $task_id, $reactorId, $data) use ($apiName, $builder, $logTz, $serverRequestFactory, $psr17Factory) {
+                try
                 {
-                    $app = $builder->create();
-                    $app->useEnvironmentPath($apiBootstrapDirectoryPath);
-                    
-                    View::setFinder(new FileViewFinder(new Filesystem(), [$apiViewDirecoryPath]));
+                    $taskLog = "TASK server_worker_id={$server->worker_id}\tonTask: [PID={$server->worker_pid}]: task_id=$task_id";
 
+                    $OpenSwooleRequest = OpenSwooleRequest::Create();
+
+                    $OpenSwooleRequest->parse($data[0]);
                     $psrServerRequest = $serverRequestFactory->createFromSwoole($OpenSwooleRequest);
-                
-                    $httpFoundationFactory = new HttpFoundationFactory();
-                    $symfonyRequest = $httpFoundationFactory->createRequest($psrServerRequest);
 
-                    $cors = new CorsService($apiCorsConfig);
+                    $requestLog = '[' . $apiName . '][' . (new \DateTime('now', new \DateTimeZone($logTz)))->format('Y-m-d H:i:s') . '][' . strtoupper($psrServerRequest->getMethod()) . '] ' . $psrServerRequest->getUri()->getPath();
+                    $sended = false;
 
-                    if ($cors->isCorsRequest($symfonyRequest)) {
-                        if ($allowCors) {
-                            if ($cors->isPreflightRequest($symfonyRequest)) {
-                                $symfonyResponse = $cors->handlePreflightRequest($symfonyRequest);
+                    $this->outText($requestLog . ' [' . $taskLog . ']');
 
-                                $cors->varyHeader($symfonyResponse, 'Access-Control-Request-Method');
-                            }
-                            else {
-                                if ($cors->isOriginAllowed($symfonyRequest)) {
-                                    $symfonyResponse = $app->handle($symfonyRequest);
+                    $app = $builder->create();
 
-                                    if ($symfonyRequest->getMethod() === 'OPTIONS') {
-                                        $cors->varyHeader($symfonyResponse, 'Access-Control-Request-Method');
-                                    }
-
-                                    if (!$symfonyResponse->headers->has('Access-Control-Allow-Origin')) {
-                                        $symfonyResponse = $cors->addActualRequestHeaders($symfonyResponse, $symfonyRequest);
-                                    }
-                                }
-                                else {
-                                    $symfonyResponse = new Response(null, 403);
-                                }
-                            }
-                        }
-                        else {
-                            $symfonyResponse = new Response(null, 403);
-                        }
-                    }
-                    else {
-                        $symfonyResponse = $app->handle($symfonyRequest);
-                    }
-
-                    $psrHttpFactory = new PsrHttpFactory($psr17Factory, $psr17Factory, $psr17Factory, $psr17Factory);
-                            
-                    $psrResponse = $psrHttpFactory->createResponse($symfonyResponse);
-
-                    $converter = new SwooleResponseConverter($OpenSwooleResponse);
-                    $converter->send($psrResponse);
-
-                    $sended = true;
-                }
-                catch (Throwable $e) {
-                    $this->outText($requestLog . ' [Handle request exception: ' . $e->getMessage() . ']');
-                }
-
-                if ($sended) {
                     try 
                     {
-                        $kernel = $app->make(HttpKernelContract::class);
+                        $symfonyRequest = (new HttpFoundationFactory())->createRequest($psrServerRequest);
+                        
+                        $symfonyResponse = $app->handle($symfonyRequest);
 
-                        $laravelRequest = LaravelRequest::createFromBase($symfonyRequest);
-                        $laravelResponse = new LaravelResponse($symfonyResponse->getContent(), $symfonyResponse->getStatusCode(), $symfonyResponse->headers->all());
+                        $psrResponse = (new PsrHttpFactory($psr17Factory, $psr17Factory, $psr17Factory, $psr17Factory))->createResponse($symfonyResponse);
 
-                        $kernel->terminate($laravelRequest, $laravelResponse);
+                        (new SwooleResponseConverter(OpenSwooleResponse::create($data[1])))->send($psrResponse);
+
+                        $sended = true;
                     }
                     catch (Throwable $e) {
-                        $this->outText($requestLog . ' [Terminate request exception: ' . $e->getMessage() . ']');
+                        $this->outText($requestLog . ' [' . $taskLog . '][Handle request exception: ' . $e->getMessage() . ']');
+                    }
+
+                    if ($sended) {
+                        try 
+                        {
+                            $kernel = $app->make(HttpKernelContract::class);
+
+                            $laravelRequest = LaravelRequest::createFromBase($symfonyRequest);
+                            $laravelResponse = new LaravelResponse($symfonyResponse->getContent(), $symfonyResponse->getStatusCode(), $symfonyResponse->headers->all());
+
+                            $kernel->terminate($laravelRequest, $laravelResponse);
+                        }
+                        catch (Throwable $e) {
+                            $this->outText($requestLog . ' [' . $taskLog . '][Terminate request exception: ' . $e->getMessage() . ']');
+                        }
                     }
                 }
+                catch (Throwable $e) {
+                    $this->outText($requestLog . ' [' . $taskLog . '][Create app exception: ' . $e->getMessage() . ']');
+                }
+            });
+
+            $server->on('request', function(OpenSwooleRequest $OpenSwooleRequest, OpenSwooleResponse $OpenSwooleResponse) use ($server) {
+                $OpenSwooleResponse->detach();
+                $server->task([$OpenSwooleRequest->getData(), $OpenSwooleResponse->fd]);
             });
 
             $server->start();

@@ -17,20 +17,16 @@ class SwaggerEndpoints extends Endpoints
     #[Get(path: '/docs', name: 'swagger_index')]
     public function index()
     {
-        $urlParts = parse_url(url()->current());
-        $url = $urlParts['scheme'] . '://' . $urlParts['host'] . ':' . $urlParts['port'];
-
-        return response(str_replace(['{{ swagger_json_url }}', '{{ base_href }}'], [route('swagger_json'), $url], file_get_contents(Utils::makeFilePath(__DIR__, 'bootstrap', 'swagger_index.html'))), 200)->header('Content-Type', 'text/html');
+        return response(str_replace(['{{ swagger_json_url }}', '{{ base_href }}'], [route('swagger_json'), config('app.url')], file_get_contents(Utils::makeFilePath(__DIR__, 'runtime', 'sweetapi', 'swagger_index.html'))), 200)->header('Content-Type', 'text/html');
     }
 
     #[Get(path: '/json', name: 'swagger_json')]
     public function json()
     {
-        $jsonFilePath = Utils::makeFilePath(__DIR__, 'bootstrap', 'swagger.json');
+        $jsonFilePath = Utils::makeFilePath(__DIR__, 'runtime', 'sweetapi', 'swagger.json');
     
         if (!file_exists($jsonFilePath)) {
-            $urlParts = parse_url(url()->current());
-            $this->generateSwaggerJson($urlParts);
+            $this->generateSwaggerJson(parse_url(config('app.url')));
         }
 
         return response(file_get_contents($jsonFilePath), 200)->header('Content-Type', 'application/json');
@@ -47,10 +43,9 @@ class SwaggerEndpoints extends Endpoints
             }
 
             $apiName = '{{ api_name }}';
-            $apiDirectoryPath = app_path('Http/SweetApi/' . $apiName);
             $apiPrefix = '/' . strtolower($apiName);
 
-            $classes = glob($apiDirectoryPath . DIRECTORY_SEPARATOR . '?*Endpoints.php');
+            $classes = glob(__DIR__ . DIRECTORY_SEPARATOR . '?*Endpoints.php');
 
             if (count($classes) > 0) {
                 $endpointsStruct = [];
@@ -227,7 +222,7 @@ class SwaggerEndpoints extends Endpoints
 
                 $json = Writer::writeToJson($cebe, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
-                file_put_contents(Utils::makeFilePath(__DIR__, 'bootstrap', 'swagger.json'), $json);
+                file_put_contents(Utils::makeFilePath(__DIR__, 'runtime', 'sweetapi', 'swagger.json'), $json);
             }
         }
         catch (Throwable $e) {
