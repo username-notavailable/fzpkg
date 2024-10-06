@@ -2,171 +2,68 @@
 
 namespace Fuzzy\Fzpkg\Console\Commands;
 
-use Fuzzy\Fzpkg\Console\Commands\BaseCommand;
 use Fuzzy\Fzpkg\Classes\Utils\Utils;
 use Fuzzy\Fzpkg\Classes\SweetApi\Attributes\Router\{RoutePrefix, Route, BaseMiddleware, Trashed};
-
-use Illuminate\Http\Request as LaravelRequest;
-use Illuminate\Http\Response as LaravelResponse;
-use Illuminate\Contracts\Http\Kernel as HttpKernelContract;
-
-use Symfony\Bridge\PsrHttpMessage\Factory\HttpFoundationFactory;
-use Symfony\Bridge\PsrHttpMessage\Factory\PsrHttpFactory;
-
-use Nyholm\Psr7\Factory\Psr17Factory;
-
-use OpenSwoole\HTTP\Server as OpenSwooleHttpServer;
-use OpenSwoole\Server as OpenSwooleServer;
-use OpenSwoole\Http\Request as OpenSwooleRequest;
-use OpenSwoole\Http\Response as OpenSwooleResponse;
-use Ilex\SwoolePsr7\SwooleServerRequestConverter;
-use Ilex\SwoolePsr7\SwooleResponseConverter;
-
+use Symfony\Component\Console\Input\InputOption;
+use Illuminate\Foundation\Bootstrap\LoadConfiguration;
+use Illuminate\Support\Env;
+use Dotenv\Dotenv;
 use ReflectionClass;
-use Throwable;
+use Laravel\Octane\Commands\StartCommand;
 
 //### FIXME: Aggiungere altri attributi per le rotte... (where etc...) https://laravel.com/docs/11.x/routing
 
-final class RunSweetApiCommand extends BaseCommand
+final class RunSweetApiCommand extends StartCommand
 {
-    protected $signature = 'fz:run:sweetapi { apiName : SweetApi Folder (case sensitive) } { --logTz=Europe/Rome : Log timezone } { --disableSwagger : Disable Swagger docs } { --httpCompressionLevel=1 : Default compression level [1-9] } { --workerNum=4 : OpenSwoole worker number } { --taskWorkerNum=4 : OpenSwoole task worker number } { --backlog=128 : OpenSwoole TCP backlog connection number }';
+    public $description = 'Start the Octane/SweetAPI server (Octane package REQUIRED)';
 
-    protected $description = 'Avvia un HTTP server SweetAPI';
+    public function __construct()
+    {
+        $signature = str_replace('octane:start', 'fz:sweetapi:run { apiName : SweetApi Folder (case sensitive) } { --disable-swagger : Disable swagger documentation }', $this->signature);
+        $signature = preg_replace('@{--host=[^}]+}@m', '', $signature);
+        $signature = preg_replace('@{--port=[^}]+}@m', '', $signature);
+
+        $this->signature = $signature;
+
+        parent::__construct();
+    }
 
     public function handle(): void
     {
-        $this->enableOutLogs();
+        $apiName = $this->argument('apiName');
+        $apiDirectoryPath = app_path('Http/SweetApi/' . $apiName);
+        $apiRuntimeDirectoryPath = Utils::makeDirectoryPath($apiDirectoryPath, 'runtime');
 
-        require Utils::makeFilePath(__DIR__, '..', '..', '..', 'vendor', 'autoload.php');
-
-        $exts = get_loaded_extensions();
-        $requiredExts = ['raphf', 'openswoole'];
-
-        foreach ($requiredExts as $ext) {
-            if (!in_array($ext, $exts)) {
-                $this->fail('SweetAPI require "' . implode(', ', $requiredExts) . '" (' . $ext . ' missing)');
-            }
+        if (!file_exists($apiDirectoryPath)) {
+            $this->fail('SweetAPI "' . $this->argument('apiName') . '" not exists (directory "' . $apiDirectoryPath . '" not found)');
+        }
+        else {
+            $this->createRoutesFile($apiName, $apiDirectoryPath, Utils::makeFilePath($apiRuntimeDirectoryPath, 'routes', 'api.php'));
         }
 
-        try 
-        {
-            $apiName = $this->argument('apiName');
-            $logTz = $this->option('logTz');
-            $host = null;
-            $port = null;
+        app()->setBasePath($apiRuntimeDirectoryPath);
+        app()->useEnvironmentPath($apiRuntimeDirectoryPath);
 
-            $apiDirectoryPath = app_path('Http/SweetApi/' . $apiName);
-            $apiRuntimeDirectoryPath = Utils::makeDirectoryPath($apiDirectoryPath, 'runtime');
-            $sweetApiDirectoryPath = Utils::makeDirectoryPath($apiRuntimeDirectoryPath, 'sweetapi');
+        Dotenv::create(Env::getRepository(), app()->environmentPath(), app()->environmentFile())->load();
 
-            $envFilePath = Utils::makeFilePath($apiRuntimeDirectoryPath, '.env');
-            $match = [];
+        (new LoadConfiguration())->bootstrap(app());
 
-            preg_match('@APP_URL=(.+)@m', file_get_contents($envFilePath), $match);
+        $this->getDefinition()->addOption(new InputOption('--host', null, InputOption::VALUE_REQUIRED, ''));
+        $this->getDefinition()->addOption(new InputOption('--port', null, InputOption::VALUE_REQUIRED, ''));
 
-            if (count($match) !== 2) {
-                throw new \InvalidArgumentException('Invalid APP_URL in .env');
-            }
-            else {
-                $urlParts = parse_url($match[1]);
-                
-                $host = $urlParts['scheme'] . '://' . $urlParts['host'];
-                $port = isset($urlParts['port']) ? $urlParts['port'] : 8080;
-            }
+        $urlParts = parse_url(config('app.url'));
+
+        if (!isset($urlParts['host'])) {
+            $this->fail('SweetAPI "' . $this->argument('apiName') . '" invalid APP_URL value in .env');
+        }
             
-            if (!file_exists($apiDirectoryPath)) {
-                $this->fail('SweetAPI "' . $this->argument('apiName') . '" not exists (directory "' . $apiDirectoryPath . '" not found)');
-            }
-            else {
-                $this->createRoutesFile($apiName, $apiDirectoryPath, Utils::makeFilePath($apiRuntimeDirectoryPath, 'routes', 'api.php'));
-            }
+        $host = $urlParts['host'];
+        $port = isset($urlParts['port']) ? $urlParts['port'] : 80;
 
-            $builder = require_once Utils::makeFilePath($apiRuntimeDirectoryPath, 'bootstrap', 'builder.php');
+        $this->getDefinition()->getOption('host')->setDefault($host);
+        $this->getDefinition()->getOption('port')->setDefault($port);
 
-            $psr17Factory = new Psr17Factory();
-            $serverRequestFactory = new SwooleServerRequestConverter($psr17Factory, $psr17Factory, $psr17Factory, $psr17Factory);
-
-            $server = new OpenSwooleHttpServer($host, $port, OpenSwooleServer::POOL_MODE);
-
-            $server->set([
-                'document_root' => Utils::makeDirectoryPath($sweetApiDirectoryPath, 'swagger'),
-                'enable_static_handler' => true,
-                'http_compression' => true,
-                'http_compression_level' => $this->option('httpCompressionLevel'),
-                'worker_num' => $this->option('workerNum'),             // The number of worker processes to start
-                'task_worker_num' => $this->option('taskWorkerNum'),    // The amount of task workers to start
-                'backlog' => $this->option('backlog'),                  // TCP backlog connection number
-            ]);
-
-            $server->on('start', function($server) use ($apiName, $host, $port, $logTz) {
-                $this->outText("### SweetAPI: $apiName -- running at $host:$port (started at " . (new \DateTime('now', new \DateTimeZone($logTz)))->format('Y-m-d H:i:s') . ") ###\n");
-            });
-
-            $server->on('task', function (OpenSwooleServer $server, $task_id, $reactorId, $data) use ($apiName, $builder, $logTz, $serverRequestFactory, $psr17Factory) {
-                try
-                {
-                    $taskLog = "TASK server_worker_id={$server->worker_id}\tonTask: [PID={$server->worker_pid}]: task_id=$task_id";
-
-                    $OpenSwooleRequest = OpenSwooleRequest::Create();
-
-                    $OpenSwooleRequest->parse($data[0]);
-                    $psrServerRequest = $serverRequestFactory->createFromSwoole($OpenSwooleRequest);
-
-                    $requestLog = '[' . $apiName . '][' . (new \DateTime('now', new \DateTimeZone($logTz)))->format('Y-m-d H:i:s') . '][' . strtoupper($psrServerRequest->getMethod()) . '] ' . $psrServerRequest->getUri()->getPath();
-                    $sended = false;
-
-                    $this->outText($requestLog . ' [' . $taskLog . ']');
-
-                    $app = $builder->create();
-
-                    try 
-                    {
-                        $symfonyRequest = (new HttpFoundationFactory())->createRequest($psrServerRequest);
-                        
-                        $symfonyResponse = $app->handle($symfonyRequest);
-
-                        $psrResponse = (new PsrHttpFactory($psr17Factory, $psr17Factory, $psr17Factory, $psr17Factory))->createResponse($symfonyResponse);
-
-                        (new SwooleResponseConverter(OpenSwooleResponse::create($data[1])))->send($psrResponse);
-
-                        $sended = true;
-                    }
-                    catch (Throwable $e) {
-                        $this->outText($requestLog . ' [' . $taskLog . '][Handle request exception: ' . $e->getMessage() . ']');
-                    }
-
-                    if ($sended) {
-                        try 
-                        {
-                            $kernel = $app->make(HttpKernelContract::class);
-
-                            $laravelRequest = LaravelRequest::createFromBase($symfonyRequest);
-                            $laravelResponse = new LaravelResponse($symfonyResponse->getContent(), $symfonyResponse->getStatusCode(), $symfonyResponse->headers->all());
-
-                            $kernel->terminate($laravelRequest, $laravelResponse);
-                        }
-                        catch (Throwable $e) {
-                            $this->outText($requestLog . ' [' . $taskLog . '][Terminate request exception: ' . $e->getMessage() . ']');
-                        }
-                    }
-                }
-                catch (Throwable $e) {
-                    $this->outText($requestLog . ' [' . $taskLog . '][Create app exception: ' . $e->getMessage() . ']');
-                }
-            });
-
-            $server->on('request', function(OpenSwooleRequest $OpenSwooleRequest, OpenSwooleResponse $OpenSwooleResponse) use ($server) {
-                $OpenSwooleResponse->detach();
-                $server->task([$OpenSwooleRequest->getData(), $OpenSwooleResponse->fd]);
-            });
-
-            $server->start();
-        }
-        catch(Throwable $e) {
-            $this->outLabelledError('SweetAPI "' . $this->argument('apiName') . '" Init failed: ' . $e->getMessage());
-
-            throw $e;
-        }
+        parent::handle();
     }
 
     protected function createRoutesFile(string $apiName, string $apiDirectoryPath, string $apiRoutesFilename) 
@@ -182,7 +79,7 @@ final class RunSweetApiCommand extends BaseCommand
             foreach ($classes as $idx => $class) {
                 $className = basename($class, '.php');
 
-                if ($className === 'SwaggerEndpoints' && $this->option('disableSwagger')) {
+                if ($className === 'SwaggerEndpoints' && $this->option('disable-swagger')) {
                     continue;
                 }
 

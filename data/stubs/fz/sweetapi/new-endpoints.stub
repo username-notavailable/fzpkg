@@ -17,48 +17,48 @@ class {{ class_name }}Endpoints extends Endpoints
     #[Get(path: '/sweet/get', name: '{{ class_name_lowercase }}_sweet_get')]
     public function sweet_get({{ request_type }} $request) : {{ response_type }}
     {
-        return response()->json('SweetAPI "{{ api_name }}" endpoint ({{ class_name }} - GET)');
+        return new {{ response_type }}('SweetAPI "{{ api_name }}" endpoint ({{ class_name }} - GET)');
     }
 
     #[Post(path: '/sweet/post', name: '{{ class_name_lowercase }}_sweet_post')]
     public function sweet_post({{ request_type }} $request) : {{ response_type }}
     {
-        return response()->json('SweetAPI "{{ api_name }}" endpoint ({{ class_name }} - POST)');
+        return new {{ response_type }}('SweetAPI "{{ api_name }}" endpoint ({{ class_name }} - POST)');
     }
 
     #[Put(path: '/sweet/put', name: '{{ class_name_lowercase }}_sweet_put')]
     public function sweet_put({{ request_type }} $request) : {{ response_type }}
     {
-        return response()->json('SweetAPI "{{ api_name }}" endpoint ({{ class_name }} - PUT)');
+        return new {{ response_type }}('SweetAPI "{{ api_name }}" endpoint ({{ class_name }} - PUT)');
     }
 
     #[Patch(path: '/sweet/patch', name: '{{ class_name_lowercase }}_sweet_patch')]
     public function sweet_patch({{ request_type }} $request) : {{ response_type }}
     {
-        return response()->json('SweetAPI "{{ api_name }}" endpoint ({{ class_name }} - PATCH)');
+        return new {{ response_type }}('SweetAPI "{{ api_name }}" endpoint ({{ class_name }} - PATCH)');
     }
 
     #[Delete(path: '/sweet/delete', name: '{{ class_name_lowercase }}_sweet_delete')]
     public function sweet_delete({{ request_type }} $request) : {{ response_type }}
     {
-        return response()->json('SweetAPI "{{ api_name }}" endpoint ({{ class_name }} - DELETE)');
+        return new {{ response_type }}('SweetAPI "{{ api_name }}" endpoint ({{ class_name }} - DELETE)');
     }
 
     #[Options(path: '/sweet/options', name: '{{ class_name_lowercase }}_sweet_options')]
     public function sweet_options({{ request_type }} $request) : {{ response_type }}
     {
-        return response()->json('SweetAPI "{{ api_name }}" endpoint ({{ class_name }} - OPTIONS)');
+        return new {{ response_type }}('SweetAPI "{{ api_name }}" endpoint ({{ class_name }} - OPTIONS)');
     }
 
     #[Route(path: '/sweet/any', verbs: '*', name: '{{ class_name_lowercase }}_sweet_any')]
     public function sweet_any({{ request_type }} $request) : {{ response_type }}
     {
-        return response()->json('SweetAPI "{{ api_name }}" endpoint ({{ class_name }} - ANY)');
+        return new {{ response_type }}('SweetAPI "{{ api_name }}" endpoint ({{ class_name }} - ANY)');
     }
 
     #[Route(path: '/sweet/match', verbs: 'GET|POST', name: '{{ class_name_lowercase }}_sweet_match')]
     public function sweet_match({{ request_type }} $request) : {{ response_type }}
     {
-        return response()->json('SweetAPI "{{ api_name }}" endpoint ({{ class_name }} - MATCH)');
+        return new {{ response_type }}('SweetAPI "{{ api_name }}" endpoint ({{ class_name }} - MATCH)');
     }
 }

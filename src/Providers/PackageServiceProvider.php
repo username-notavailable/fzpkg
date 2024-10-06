@@ -16,8 +16,11 @@ use Fuzzy\Fzpkg\Console\Commands\InstallUtilsCommand;
 use Fuzzy\Fzpkg\Console\Commands\MakeLivewireFormCommand;
 use Fuzzy\Fzpkg\Console\Commands\MakeSweetApiEndpointsCommand;
 use Fuzzy\Fzpkg\Console\Commands\MakeVoltComponentCommand;
+use Fuzzy\Fzpkg\Console\Commands\ReloadSweetApiCommand;
 use Fuzzy\Fzpkg\Console\Commands\RunScrapersCommand;
 use Fuzzy\Fzpkg\Console\Commands\RunSweetApiCommand;
+use Fuzzy\Fzpkg\Console\Commands\StatusSweetApiCommand; 
+use Fuzzy\Fzpkg\Console\Commands\StopSweetApiCommand;
 
 final class PackageServiceProvider extends ServiceProvider
 {
@@ -41,9 +44,11 @@ final class PackageServiceProvider extends ServiceProvider
                     MakeLivewireFormCommand::class,
                     MakeSweetApiEndpointsCommand::class,
                     MakeVoltComponentCommand::class,
+                    ReloadSweetApiCommand::class,
                     RunScrapersCommand::class,
-                    RunSweetApiCommand::class
-                ],
+                    RunSweetApiCommand::class,
+                    StatusSweetApiCommand::class,
+                    StopSweetApiCommand::class                ],
             );
         }
     }

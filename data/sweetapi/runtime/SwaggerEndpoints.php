@@ -17,7 +17,10 @@ class SwaggerEndpoints extends Endpoints
     #[Get(path: '/docs', name: 'swagger_index')]
     public function index()
     {
-        return response(str_replace(['{{ swagger_json_url }}', '{{ base_href }}'], [route('swagger_json'), config('app.url')], file_get_contents(Utils::makeFilePath(__DIR__, 'runtime', 'sweetapi', 'swagger_index.html'))), 200)->header('Content-Type', 'text/html');
+        $urlParts = parse_url(url()->current());
+        $url = $urlParts['scheme'] . '://' . $urlParts['host'] . ($urlParts['port'] === 80 ? '' : ':' . $urlParts['port']);
+
+        return response(str_replace(['{{ swagger_json_url }}', '{{ base_href }}'], [route('swagger_json'), $url], file_get_contents(Utils::makeFilePath(__DIR__, 'runtime', 'sweetapi', 'swagger_index.html'))), 200)->header('Content-Type', 'text/html');
     }
 
     #[Get(path: '/json', name: 'swagger_json')]
@@ -26,7 +29,7 @@ class SwaggerEndpoints extends Endpoints
         $jsonFilePath = Utils::makeFilePath(__DIR__, 'runtime', 'sweetapi', 'swagger.json');
     
         if (!file_exists($jsonFilePath)) {
-            $this->generateSwaggerJson(parse_url(config('app.url')));
+            $this->generateSwaggerJson(parse_url(url()->current()));
         }
 
         return response(file_get_contents($jsonFilePath), 200)->header('Content-Type', 'application/json');
