@@ -15,11 +15,17 @@ use Laravel\Octane\Commands\StartCommand;
 
 final class RunSweetApiCommand extends StartCommand
 {
-    public $description = 'Start the Octane/SweetAPI server (Octane package REQUIRED)';
+    public $description = 'Start the Octane/SweetAPI server';
 
     public function __construct()
     {
-        $signature = str_replace('octane:start', 'fz:sweetapi:run { apiName : SweetApi Folder (case sensitive) } { --disable-swagger : Disable swagger documentation }', $this->signature);
+        if (!defined('SWEET_LARAVEL_FOR')) {
+            $signature = str_replace('octane:start', 'fz:sweetapi:run { apiName : SweetApi Folder (case sensitive) } { --disable-swagger : Disable swagger documentation }', $this->signature);
+        }
+        else {
+            $signature = str_replace('octane:start', 'fz:sweetapi:run { --disable-swagger : Disable swagger documentation }', $this->signature);
+        }
+
         $signature = preg_replace('@{--host=[^}]+}@m', '', $signature);
         $signature = preg_replace('@{--port=[^}]+}@m', '', $signature);
 
@@ -30,23 +36,30 @@ final class RunSweetApiCommand extends StartCommand
 
     public function handle(): void
     {
-        $apiName = $this->argument('apiName');
-        $apiDirectoryPath = app_path('Http/SweetApi/' . $apiName);
-        $apiRuntimeDirectoryPath = Utils::makeDirectoryPath($apiDirectoryPath, 'runtime');
+        if (!defined('SWEET_LARAVEL_FOR')) {
+            $apiName = $this->argument('apiName');
+            $apiDirectoryPath = base_path('sweets/' . $apiName);
 
-        if (!file_exists($apiDirectoryPath)) {
-            $this->fail('SweetAPI "' . $this->argument('apiName') . '" not exists (directory "' . $apiDirectoryPath . '" not found)');
+            if (!file_exists($apiDirectoryPath)) {
+                $this->fail('SweetAPI "' . $this->argument('apiName') . '" not exists (directory "' . $apiDirectoryPath . '" not found)');
+            }
+            else {
+                $this->createRoutesFile($apiDirectoryPath, Utils::makeFilePath($apiDirectoryPath, 'routes', 'api.php'));
+            }
+
+            app()->setBasePath($apiDirectoryPath);
+            app()->useEnvironmentPath($apiDirectoryPath);
+
+            Dotenv::create(Env::getRepository(), app()->environmentPath(), app()->environmentFile())->load();
+
+            (new LoadConfiguration())->bootstrap(app());
         }
         else {
-            $this->createRoutesFile($apiName, $apiDirectoryPath, Utils::makeFilePath($apiRuntimeDirectoryPath, 'routes', 'api.php'));
+            $apiName = SWEET_LARAVEL_FOR;
+            $apiDirectoryPath = base_path();
+
+            $this->createRoutesFile($apiDirectoryPath, Utils::makeFilePath($apiDirectoryPath, 'routes', 'api.php'));
         }
-
-        app()->setBasePath($apiRuntimeDirectoryPath);
-        app()->useEnvironmentPath($apiRuntimeDirectoryPath);
-
-        Dotenv::create(Env::getRepository(), app()->environmentPath(), app()->environmentFile())->load();
-
-        (new LoadConfiguration())->bootstrap(app());
 
         $this->getDefinition()->addOption(new InputOption('--host', null, InputOption::VALUE_REQUIRED, ''));
         $this->getDefinition()->addOption(new InputOption('--port', null, InputOption::VALUE_REQUIRED, ''));
@@ -66,15 +79,19 @@ final class RunSweetApiCommand extends StartCommand
         parent::handle();
     }
 
-    protected function createRoutesFile(string $apiName, string $apiDirectoryPath, string $apiRoutesFilename) 
+    protected function createRoutesFile(string $apiDirectoryPath, string $apiRoutesFilename) 
     {
-        $classes = glob($apiDirectoryPath . DIRECTORY_SEPARATOR . '?*Endpoints.php');
+        $classes = glob(Utils::makeFilePath($apiDirectoryPath, 'app', 'Http', 'Endpoints', '?*Endpoints.php'));
 
         file_put_contents($apiRoutesFilename, '');
 
         if (count($classes) > 0) {
             $endpointsStruct = [];
             $uses = [];
+
+            if (!defined('SWEET_LARAVEL_FOR')) {
+                include Utils::makeFilePath($apiDirectoryPath, 'vendor', 'autoload.php');
+            }
 
             foreach ($classes as $idx => $class) {
                 $className = basename($class, '.php');
@@ -84,7 +101,7 @@ final class RunSweetApiCommand extends StartCommand
                 }
 
                 $endpointsStruct[$idx] = [];
-                $endpointsStruct[$idx]['use'] = Utils::makeNamespacePath('App', 'Http', 'SweetApi', $apiName, $className);
+                $endpointsStruct[$idx]['use'] = Utils::makeNamespacePath('App', 'Http', 'Endpoints', $className);
                 $endpointsStruct[$idx]['prefix'] = '';
                 $endpointsStruct[$idx]['middleware'] = ['add' => [], 'exclude' => []];
                 $endpointsStruct[$idx]['controller'] = $className;

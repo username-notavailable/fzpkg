@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\SweetApi\{{ api_name }};
+namespace App\Http\Endpoints;
 
 use Fuzzy\Fzpkg\Classes\Utils\Utils;
 use Fuzzy\Fzpkg\Classes\SweetApi\Attributes\Router\{RoutePrefix, Get, Route, Info, Response, Tag, WithParam};
@@ -20,13 +20,13 @@ class SwaggerEndpoints extends Endpoints
         $urlParts = parse_url(url()->current());
         $url = $urlParts['scheme'] . '://' . $urlParts['host'] . ($urlParts['port'] === 80 ? '' : ':' . $urlParts['port']);
 
-        return response(str_replace(['{{ swagger_json_url }}', '{{ base_href }}'], [route('swagger_json'), $url], file_get_contents(Utils::makeFilePath(__DIR__, 'runtime', 'sweetapi', 'swagger_index.html'))), 200)->header('Content-Type', 'text/html');
+        return response(str_replace(['{{ swagger_json_url }}', '{{ base_href }}'], [route('swagger_json'), $url], file_get_contents(base_path('sweetapi/swagger_index.html'))), 200)->header('Content-Type', 'text/html');
     }
 
     #[Get(path: '/json', name: 'swagger_json')]
     public function json()
     {
-        $jsonFilePath = Utils::makeFilePath(__DIR__, 'runtime', 'sweetapi', 'swagger.json');
+        $jsonFilePath = base_path('sweetapi/swagger.json');
     
         if (!file_exists($jsonFilePath)) {
             $this->generateSwaggerJson(parse_url(url()->current()));
@@ -60,7 +60,7 @@ class SwaggerEndpoints extends Endpoints
                         continue;
                     }
 
-                    $namespace = Utils::makeNamespacePath('App', 'Http', 'SweetApi', $apiName, $className);
+                    $namespace = Utils::makeNamespacePath('App', 'Http', 'Endpoints', $className);
 
                     $endpointsStruct[$idx] = [];
                     $endpointsStruct[$idx]['prefix'] = '';
@@ -225,7 +225,7 @@ class SwaggerEndpoints extends Endpoints
 
                 $json = Writer::writeToJson($cebe, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
-                file_put_contents(Utils::makeFilePath(__DIR__, 'runtime', 'sweetapi', 'swagger.json'), $json);
+                file_put_contents(base_path('sweetapi/swagger.json'), $json);
             }
         }
         catch (Throwable $e) {

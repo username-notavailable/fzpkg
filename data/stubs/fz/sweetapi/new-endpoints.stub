@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\SweetApi\{{ api_name }};
+namespace App\Http\Endpoints;
 
 use Fuzzy\Fzpkg\Classes\SweetApi\Attributes\Router\{RoutePrefix, Route};
 use Fuzzy\Fzpkg\Classes\SweetApi\Attributes\Router\{Get, Post, Put, Patch, Delete, Options, Trashed};

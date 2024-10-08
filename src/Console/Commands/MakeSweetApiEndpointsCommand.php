@@ -9,11 +9,23 @@ use Illuminate\Filesystem\Filesystem;
 
 final class MakeSweetApiEndpointsCommand extends GeneratorCommand
 {
-    protected $signature = 'fz:make:sweetapi:endpoints { name : Endpoints name } { apiName : SweetApi Folder (case sensitive) } { --type=Json : Type of Request/Response [ Json | Htmx ] }';
-
     protected $description = 'Create a new SweetAPI Endpoints';
 
     protected $type = 'SweetApi endpoints';
+
+    public function __construct(Filesystem $files)
+    {
+        if (!defined('SWEET_LARAVEL_FOR')) {
+            $signature = 'fz:make:sweetapi:endpoints { name : Endpoints name } { apiName : SweetApi Folder (case sensitive) } { --type=Json : Type of Request/Response [ Json | Htmx ] }';
+        }
+        else {
+            $signature = 'fz:make:sweetapi:endpoints { name : Endpoints name } { --type=Json : Type of Request/Response [ Json | Htmx ] }';
+        }
+
+        $this->signature = $signature;
+
+        parent::__construct($files);
+    }
 
     protected function getStub() : string
     {
@@ -22,17 +34,32 @@ final class MakeSweetApiEndpointsCommand extends GeneratorCommand
 
     protected function getPath($name): string
     {
-        return app_path('Http/SweetApi/' . $this->argument('apiName') . '/' . $this->argument('name') . 'Endpoints.php');
+        if (!defined('SWEET_LARAVEL_FOR')) {
+            return base_path('sweets/' . $this->argument('apiName') . '/app/Http/Endpoints/' . $this->argument('name') . 'Endpoints.php');
+        }
+        else {
+            return app_path('Http/Endpoints/' . $this->argument('name') . 'Endpoints.php');   
+        }
     }
 
     public function handle(): void
     {
-        if (!$this->files->exists(app_path('Http/SweetApi/' . $this->argument('apiName')))) {
-            $this->fail('SweetAPI "' . $this->argument('apiName') . '" not found');
+        if (!defined('SWEET_LARAVEL_FOR')) {
+            $apiName = $this->argument('apiName');
+            
+            if (!$this->files->exists(base_path('sweets/' . $apiName))) {
+                $this->fail('SweetAPI "' . $this->argument('apiName') . '" not found');
+            }
+
+            $endpointsPath = base_path('sweets/' . $this->argument('apiName') . '/app/Http/Endpoints/' . $this->argument('name') . 'Endpoints.php');
+        }
+        else {
+            $apiName = SWEET_LARAVEL_FOR;
+            $endpointsPath = app_path('Http/Endpoints/' . $this->argument('name') . 'Endpoints.php'); 
         }
 
-        if ($this->files->exists(app_path('Http/SweetApi/' . $this->argument('apiName') . '/' . $this->argument('name') . 'Endpoints.php'))) {
-            $this->fail('Endpoints "' . $this->argument('name') . '" already exists into SweetAPI "' . $this->argument('apiName') . '"');
+        if ($this->files->exists($endpointsPath)) {
+            $this->fail('Endpoints "' . $this->argument('name') . '" already exists into SweetAPI "' . $apiName . '"');
         }
 
         if (!in_array($this->option('type'), ['Json', 'Htmx'])) {
@@ -48,12 +75,11 @@ final class MakeSweetApiEndpointsCommand extends GeneratorCommand
 
     protected function getDefaultNamespace($rootNamespace)
     {
-        return $rootNamespace . '\Http\SweetApi\\' . $this->argument('apiName');
+        return 'App\Http\Endpoints';
     }
 
     protected function replaceClass($stub, $name)
     {
-        $stub = str_replace('{{ api_name }}', $this->argument('apiName'), $stub);
         $stub = str_replace('{{ class_name_lowercase }}', strtolower($this->argument('name')), $stub);
 
         if ($this->option('type') === 'Json') {

@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\SweetApi\{{ api_name }};
+namespace App\Http\Endpoints;
 
 abstract class Endpoints
 {

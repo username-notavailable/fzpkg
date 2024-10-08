@@ -2,7 +2,6 @@
 
 namespace Fuzzy\Fzpkg\Console\Commands;
 
-use Fuzzy\Fzpkg\Classes\Utils\Utils;
 use Illuminate\Foundation\Bootstrap\LoadConfiguration;
 use Symfony\Component\Console\Input\InputOption;
 use Illuminate\Support\Env;
@@ -11,11 +10,17 @@ use Laravel\Octane\Commands\StatusCommand;
 
 final class StatusSweetApiCommand extends StatusCommand
 {
-    public $description = 'Get the current status of the Octane/SweetAPI server (Octane package REQUIRED)';
+    public $description = 'Get the current status of the Octane/SweetAPI server';
 
     public function __construct()
     {
-        $signature = str_replace('octane:status', 'fz:sweetapi:status { apiName : SweetApi Folder (case sensitive) }', $this->signature);
+        if (!defined('SWEET_LARAVEL_FOR')) {
+            $signature = str_replace('octane:status', 'fz:sweetapi:status { apiName : SweetApi Folder (case sensitive) }', $this->signature);
+        }
+        else {
+            $signature = str_replace('octane:status', 'fz:sweetapi:status', $this->signature);
+        }
+
         $signature = preg_replace('@{--server=[^}]+}@', '', $signature);
 
         $this->signature = $signature;
@@ -25,21 +30,22 @@ final class StatusSweetApiCommand extends StatusCommand
 
     public function handle(): void
     {
-        $apiName = $this->argument('apiName');
-        $apiDirectoryPath = app_path('Http/SweetApi/' . $apiName);
-        $apiRuntimeDirectoryPath = Utils::makeDirectoryPath($apiDirectoryPath, 'runtime');
+        if (!defined('SWEET_LARAVEL_FOR')) {
+            $apiName = $this->argument('apiName');
+            $apiDirectoryPath = base_path('sweets/' . $apiName);
 
-        if (!file_exists($apiDirectoryPath)) {
-            $this->fail('SweetAPI "' . $this->argument('apiName') . '" not exists (directory "' . $apiDirectoryPath . '" not found)');
+            if (!file_exists($apiDirectoryPath)) {
+                $this->fail('SweetAPI "' . $apiName . '" not exists (directory "' . $apiDirectoryPath . '" not found)');
+            }
+
+            app()->setBasePath($apiDirectoryPath);
+            app()->useEnvironmentPath($apiDirectoryPath);
+
+            Dotenv::create(Env::getRepository(), app()->environmentPath(), app()->environmentFile())->load();
+
+            (new LoadConfiguration())->bootstrap(app());
         }
-
-        app()->setBasePath($apiRuntimeDirectoryPath);
-        app()->useEnvironmentPath($apiRuntimeDirectoryPath);
-
-        Dotenv::create(Env::getRepository(), app()->environmentPath(), app()->environmentFile())->load();
-
-        (new LoadConfiguration())->bootstrap(app());
-
+        
         $server = config('octane.server');
 
         $this->getDefinition()->addOption(new InputOption('--server', null, InputOption::VALUE_REQUIRED, $server));

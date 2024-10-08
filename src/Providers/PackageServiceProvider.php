@@ -31,25 +31,29 @@ final class PackageServiceProvider extends ServiceProvider
         ]);
 
         if ($this->app->runningInConsole()) {
-            $this->commands(
-                commands: [
-                    InstallEventsCommand::class,
-                    InstallLanguagesCommand::class,
-                    InstallLivewireLayoutsCommand::class,
-                    InstallMiddlewaresCommand::class,
-                    InstallScrapersCommand::class,
-                    InstallStubsCommand::class,
-                    InstallSweetApiCommand::class,
-                    InstallUtilsCommand::class,
-                    MakeLivewireFormCommand::class,
-                    MakeSweetApiEndpointsCommand::class,
-                    MakeVoltComponentCommand::class,
-                    ReloadSweetApiCommand::class,
-                    RunScrapersCommand::class,
-                    RunSweetApiCommand::class,
-                    StatusSweetApiCommand::class,
-                    StopSweetApiCommand::class                ],
-            );
+            $commands = [
+                InstallEventsCommand::class,
+                InstallLanguagesCommand::class,
+                InstallLivewireLayoutsCommand::class,
+                InstallMiddlewaresCommand::class,
+                InstallScrapersCommand::class,
+                InstallStubsCommand::class,
+                InstallSweetApiCommand::class,
+                InstallUtilsCommand::class,
+                MakeLivewireFormCommand::class,
+                MakeSweetApiEndpointsCommand::class,
+                MakeVoltComponentCommand::class,
+                RunScrapersCommand::class
+            ];
+            
+            if (\Composer\InstalledVersions::isInstalled('laravel/octane')) {
+                $commands[] = ReloadSweetApiCommand::class;
+                $commands[] = RunSweetApiCommand::class;
+                $commands[] = StatusSweetApiCommand::class;
+                $commands[] = StopSweetApiCommand::class;
+            }
+
+            $this->commands($commands);
         }
     }
 }
