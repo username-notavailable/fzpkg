@@ -13,11 +13,11 @@ final class InstallSweetApiCommand extends BaseCommand
 {
     protected $signature = 'fz:install:sweetapi { apiName : SweetApi Folder (case sensitive) }';
 
-    protected $description = 'Install new SweetAPI (ZIP file)';
+    protected $description = 'Install new SweetAPI directory';
 
     public function handle(): void
     {
-        if (defined('SWEET_LARAVEL_FOR')) {
+        if (defined('RUN_ARTISAN_FROM_SWEET_API_DIR')) {
             $this->fail('Command unavailable from inside a SweetAPI directory');
         }
 

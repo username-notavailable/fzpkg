@@ -12,11 +12,11 @@ final class ExportSweetApiCommand extends BaseCommand
 {
     protected $signature = 'fz:sweetapi:export { apiName : SweetApi Folder (case sensitive) }';
 
-    protected $description = 'Export SweetAPI directory';
+    protected $description = 'Export SweetAPI directory (ZIP file)';
 
     public function handle(): void
     {
-        if (defined('SWEET_LARAVEL_FOR')) {
+        if (defined('RUN_ARTISAN_FROM_SWEET_API_DIR')) {
             $this->fail('Command unavailable from inside a SweetAPI directory');
         }
 

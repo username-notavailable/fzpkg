@@ -15,7 +15,7 @@ final class MakeSweetApiEndpointsCommand extends GeneratorCommand
 
     public function __construct(Filesystem $files)
     {
-        if (!defined('SWEET_LARAVEL_FOR')) {
+        if (!defined('RUN_ARTISAN_FROM_SWEET_API_DIR')) {
             $signature = 'fz:make:sweetapi:endpoints { name : Endpoints name } { apiName : SweetApi Folder (case sensitive) } { --type=Json : Type of Request/Response [ Json | Htmx ] }';
         }
         else {
@@ -34,7 +34,7 @@ final class MakeSweetApiEndpointsCommand extends GeneratorCommand
 
     protected function getPath($name): string
     {
-        if (!defined('SWEET_LARAVEL_FOR')) {
+        if (!defined('RUN_ARTISAN_FROM_SWEET_API_DIR')) {
             return base_path('sweets/' . $this->argument('apiName') . '/app/Http/Endpoints/' . $this->argument('name') . 'Endpoints.php');
         }
         else {
@@ -44,7 +44,7 @@ final class MakeSweetApiEndpointsCommand extends GeneratorCommand
 
     public function handle(): void
     {
-        if (!defined('SWEET_LARAVEL_FOR')) {
+        if (!defined('RUN_ARTISAN_FROM_SWEET_API_DIR')) {
             $apiName = $this->argument('apiName');
             
             if (!$this->files->exists(base_path('sweets/' . $apiName))) {
@@ -54,7 +54,7 @@ final class MakeSweetApiEndpointsCommand extends GeneratorCommand
             $endpointsPath = base_path('sweets/' . $this->argument('apiName') . '/app/Http/Endpoints/' . $this->argument('name') . 'Endpoints.php');
         }
         else {
-            $apiName = SWEET_LARAVEL_FOR;
+            $apiName = RUN_ARTISAN_FROM_SWEET_API_DIR;
             $endpointsPath = app_path('Http/Endpoints/' . $this->argument('name') . 'Endpoints.php'); 
         }
 

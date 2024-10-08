@@ -19,7 +19,7 @@ final class RunSweetApiCommand extends StartCommand
 
     public function __construct()
     {
-        if (!defined('SWEET_LARAVEL_FOR')) {
+        if (!defined('RUN_ARTISAN_FROM_SWEET_API_DIR')) {
             $signature = str_replace('octane:start', 'fz:sweetapi:run { apiName : SweetApi Folder (case sensitive) } { --disable-swagger : Disable swagger documentation }', $this->signature);
         }
         else {
@@ -36,7 +36,7 @@ final class RunSweetApiCommand extends StartCommand
 
     public function handle(): void
     {
-        if (!defined('SWEET_LARAVEL_FOR')) {
+        if (!defined('RUN_ARTISAN_FROM_SWEET_API_DIR')) {
             $apiName = $this->argument('apiName');
             $apiDirectoryPath = base_path('sweets/' . $apiName);
 
@@ -55,7 +55,7 @@ final class RunSweetApiCommand extends StartCommand
             (new LoadConfiguration())->bootstrap(app());
         }
         else {
-            $apiName = SWEET_LARAVEL_FOR;
+            $apiName = RUN_ARTISAN_FROM_SWEET_API_DIR;
             $apiDirectoryPath = base_path();
 
             $this->createRoutesFile($apiDirectoryPath, Utils::makeFilePath($apiDirectoryPath, 'routes', 'api.php'));
@@ -89,7 +89,7 @@ final class RunSweetApiCommand extends StartCommand
             $endpointsStruct = [];
             $uses = [];
 
-            if (!defined('SWEET_LARAVEL_FOR')) {
+            if (!defined('RUN_ARTISAN_FROM_SWEET_API_DIR')) {
                 include Utils::makeFilePath($apiDirectoryPath, 'vendor', 'autoload.php');
             }
 

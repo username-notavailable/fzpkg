@@ -49,10 +49,12 @@ final class PackageServiceProvider extends ServiceProvider
             ];
             
             if (\Composer\InstalledVersions::isInstalled('laravel/octane')) {
-                $commands[] = ReloadSweetApiCommand::class;
-                $commands[] = RunSweetApiCommand::class;
-                $commands[] = StatusSweetApiCommand::class;
-                $commands[] = StopSweetApiCommand::class;
+                $commands = array_merge($commands, [
+                    ReloadSweetApiCommand::class,
+                    RunSweetApiCommand::class,
+                    StatusSweetApiCommand::class,
+                    StopSweetApiCommand::class
+                ]);
             }
 
             $this->commands($commands);

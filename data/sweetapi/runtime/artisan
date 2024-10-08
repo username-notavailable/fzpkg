@@ -5,7 +5,7 @@ use Symfony\Component\Console\Input\ArgvInput;
 
 define('LARAVEL_START', microtime(true));
 
-define('SWEET_LARAVEL_FOR', basename(__DIR__));
+define('RUN_ARTISAN_FROM_SWEET_API_DIR', basename(__DIR__));
 
 // Register the Composer autoloader...
 require __DIR__.'/vendor/autoload.php';

@@ -14,7 +14,7 @@ final class StopSweetApiCommand extends StopCommand
 
     public function __construct()
     {
-        if (!defined('SWEET_LARAVEL_FOR')) {
+        if (!defined('RUN_ARTISAN_FROM_SWEET_API_DIR')) {
             $signature = str_replace('octane:stop', 'fz:sweetapi:stop { apiName : SweetApi Folder (case sensitive) }', $this->signature);
         }
         else {
@@ -30,7 +30,7 @@ final class StopSweetApiCommand extends StopCommand
 
     public function handle(): void
     {
-        if (!defined('SWEET_LARAVEL_FOR')) {
+        if (!defined('RUN_ARTISAN_FROM_SWEET_API_DIR')) {
             $apiName = $this->argument('apiName');
             $apiDirectoryPath = base_path('sweets/' . $apiName);
 
