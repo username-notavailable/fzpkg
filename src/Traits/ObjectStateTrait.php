@@ -6,7 +6,7 @@ trait ObjectStateTrait
 {
     private $__trait_objectState__ = [];
 
-    protected function saveCurrentState() : void
+    protected function storeState() : void
     {
         $object = new \ReflectionObject($this);
 
@@ -26,8 +26,13 @@ trait ObjectStateTrait
         }
     }
 
-    protected function flushSavedState() : void
+    protected function flushStoredState() : void
     {
         $this->__trait_objectState__ = [];
+    }
+
+    protected function getStoredState() : array
+    {
+        return $this->__trait_objectState__;
     }
 }
