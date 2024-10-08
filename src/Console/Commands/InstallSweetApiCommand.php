@@ -13,7 +13,7 @@ final class InstallSweetApiCommand extends BaseCommand
 {
     protected $signature = 'fz:install:sweetapi { apiName : SweetApi Folder (case sensitive) }';
 
-    protected $description = 'Install new SweetAPI';
+    protected $description = 'Install new SweetAPI (ZIP file)';
 
     public function handle(): void
     {
@@ -34,9 +34,6 @@ final class InstallSweetApiCommand extends BaseCommand
         }
 
         $filesystem->copyDirectory(__DIR__ . '/../../../data/sweetapi/runtime', $newSweetApiPath);
-
-        $filesystem->replaceInFile('{{ api_name }}', $apiName, Utils::makeFilePath($newSweetApiPath, 'app', 'Http', 'Endpoints', 'SwaggerEndpoints.php'));
-        $filesystem->replaceInFile('{{ api_name_lowercase }}', strtolower($apiName), Utils::makeFilePath($newSweetApiPath, 'config', 'cors.php'));
 
         foreach (glob($newSweetApiPath . '/storage/*/*') as $item) {
              $filesystem->chmod($item, 0755);

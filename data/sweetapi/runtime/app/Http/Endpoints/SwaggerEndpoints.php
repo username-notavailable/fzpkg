@@ -45,7 +45,7 @@ class SwaggerEndpoints extends Endpoints
                 $schemes[] = 'https';
             }
 
-            $apiName = '{{ api_name }}';
+            $apiName = basename(base_path());
             $apiPrefix = '/' . strtolower($apiName);
 
             $classes = glob(__DIR__ . DIRECTORY_SEPARATOR . '?*Endpoints.php');

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Fuzzy\Fzpkg\Providers;
 
 use Illuminate\Support\ServiceProvider;
+use Fuzzy\Fzpkg\Console\Commands\ExportSweetApiCommand;
 use Fuzzy\Fzpkg\Console\Commands\InstallEventsCommand;
 use Fuzzy\Fzpkg\Console\Commands\InstallLanguagesCommand;
 use Fuzzy\Fzpkg\Console\Commands\InstallLivewireLayoutsCommand;
@@ -32,6 +33,7 @@ final class PackageServiceProvider extends ServiceProvider
 
         if ($this->app->runningInConsole()) {
             $commands = [
+                ExportSweetApiCommand::class,
                 InstallEventsCommand::class,
                 InstallLanguagesCommand::class,
                 InstallLivewireLayoutsCommand::class,

@@ -15,7 +15,7 @@ return [
     |
     */
 
-    'paths' => ['{{ api_name_lowercase }}/*'],
+    'paths' => [strtolower(basename(base_path())) . '/*'],
 
     'allowed_methods' => ['*'],
 
