@@ -34,7 +34,7 @@ final class ExportSweetApiCommand extends BaseCommand
         
 		$zip = new \ZipArchive();
 
-        $zipFilePath = Utils::makeFilePath(base_path('sweets'), $apiName . '__' . $date->format('Ymd__His') . '.zip');
+        $zipFilePath = Utils::makeFilePath(base_path('sweets'), $apiName . '_' . $date->format('Ymd__His') . '.zip');
 
         $this->outLabelledInfo('Creation of ZIP file for SweetAPI "' . $apiName . '" in progres...');
 		
@@ -43,13 +43,12 @@ final class ExportSweetApiCommand extends BaseCommand
 		}
         else {
             $rootPath = realpath($targetSweetApiPath);
+            $zipPathOffset = mb_strlen($rootPath) - mb_strlen(basename($rootPath));
 
             $files = new \RecursiveIteratorIterator(
 				new \RecursiveDirectoryIterator($rootPath),
 				\RecursiveIteratorIterator::LEAVES_ONLY
 			);
-
-			$zipPathOffset = mb_strlen($rootPath) - mb_strlen(basename($rootPath));
 
 			foreach ($files as $file)
 			{
@@ -57,6 +56,11 @@ final class ExportSweetApiCommand extends BaseCommand
 				{
 					$filePath = $file->getRealPath();
 					$relativePath = mb_substr($filePath, $zipPathOffset);
+
+                    // Skip vendor directory contents and composer.lock file
+                    if (str_starts_with($relativePath, $apiName . '/vendor') || str_starts_with($relativePath, $apiName . '/composer.lock')) {
+                        continue;
+                    }
 
 					if (!$zip->addFile($filePath, $relativePath)) {
 						$this->fail('Creation of ZIP file for SweetAPI "' . $apiName . '" failed (add)');
@@ -69,6 +73,6 @@ final class ExportSweetApiCommand extends BaseCommand
             }
         }
 
-        $this->outLabelledSuccess('ZIP file created for SweetAPI "' . $apiName . '"');
+        $this->outLabelledSuccess('ZIP file created for SweetAPI "' . $apiName . '" (' . basename($zipFilePath) . ')');
     }
 }

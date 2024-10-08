@@ -10,7 +10,7 @@
         "laravel/framework": "^11.9",
         "laravel/tinker": "^2.9",
         "laravel/octane": "^2.5",
-        "fuzzy/fzpkg": "@dev"
+        "fuzzy/fzpkg": "dev-main"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",
@@ -57,11 +57,8 @@
     },
     "repositories": [
     {
-        "type": "path",
-        "url": "/home/fuzzy/Documenti/path/Laravel/fzpkg",
-        "options": {
-            "symlink": true
-        }
+        "type": "git",
+        "url": "https://github.com/username-notavailable/fzpgk.git"
     }],
     "minimum-stability": "stable",
     "prefer-stable": true
