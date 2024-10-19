@@ -47,7 +47,16 @@ final class InstallSweetApiCommand extends BaseCommand
             ->run(function ($type, $output) {
                 $this->output->write($output);
             }) === 0) {
-                $this->outLabelledSuccess('Fuzzy SweetAPI "' . $apiName . '" installed');
+                if ((new Process(['php', 'artisan', 'migrate'], $newSweetApiPath, []))
+                    ->setTimeout(null)
+                    ->run(function ($type, $output) {
+                        $this->output->write($output);
+                    }) === 0) {
+                        $this->outLabelledSuccess('Fuzzy SweetAPI "' . $apiName . '" installed');
+                }
+                else {
+                    $this->outLabelledWarning('Fuzzy SweetAPI "' . $apiName . '" installed but "php artisan migrate" command failed, run it manually');
+                }
         }
         else {
             $this->outLabelledWarning('Fuzzy SweetAPI "' . $apiName . '" installed but "composer install" command failed, run it manually');

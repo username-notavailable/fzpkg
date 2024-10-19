@@ -3,15 +3,13 @@
 namespace Fuzzy\Fzpkg\Console\Commands;
 
 use Fuzzy\Fzpkg\Classes\Utils\Utils;
-use Fuzzy\Fzpkg\Classes\SweetApi\Attributes\Router\{RoutePrefix, Route, BaseMiddleware, Trashed};
+use Fuzzy\Fzpkg\Classes\SweetApi\Attributes\Router\{RoutePrefix, Route, BaseMiddleware};
 use Symfony\Component\Console\Input\InputOption;
 use Illuminate\Foundation\Bootstrap\LoadConfiguration;
 use Illuminate\Support\Env;
 use Dotenv\Dotenv;
 use ReflectionClass;
 use Laravel\Octane\Commands\StartCommand;
-
-//### FIXME: Aggiungere altri attributi per le rotte... (where etc...) https://laravel.com/docs/11.x/routing
 
 final class RunSweetApiCommand extends StartCommand
 {
@@ -103,6 +101,8 @@ final class RunSweetApiCommand extends StartCommand
                 $endpointsStruct[$idx] = [];
                 $endpointsStruct[$idx]['use'] = Utils::makeNamespacePath('App', 'Http', 'Endpoints', $className);
                 $endpointsStruct[$idx]['prefix'] = '';
+                $endpointsStruct[$idx]['name'] = '';
+                $endpointsStruct[$idx]['scopeBindings'] = null;
                 $endpointsStruct[$idx]['middleware'] = ['add' => [], 'exclude' => []];
                 $endpointsStruct[$idx]['controller'] = $className;
                 $endpointsStruct[$idx]['methods'] = [];
@@ -114,6 +114,8 @@ final class RunSweetApiCommand extends StartCommand
 
                     if ($attributeInstance instanceof RoutePrefix) {
                         $endpointsStruct[$idx]['prefix'] = $attributeInstance->path;
+                        $endpointsStruct[$idx]['name'] = $attributeInstance->name;
+                        $endpointsStruct[$idx]['scopeBindings'] = $attributeInstance->scopeBindings;
                     }
                     else if ($attributeInstance instanceof BaseMiddleware) {
                         $name = $attributeInstance->getName();
@@ -130,8 +132,10 @@ final class RunSweetApiCommand extends StartCommand
                     $routeVerbs = null;
                     $routePath = null;
                     $routeName = null;
+                    $withTrashed = null;
+                    $scopeBindings = null;
+                    $where = null;
                     $routeMiddleware = ['add' => [], 'exclude' => []];
-                    $withTrashed = false;
 
                     foreach ($method->getAttributes() as $attribute) {
                         $attributeInstance = $attribute->newInstance();
@@ -140,6 +144,9 @@ final class RunSweetApiCommand extends StartCommand
                             $routeVerbs = strtolower($attributeInstance->verbs);
                             $routePath = $attributeInstance->path;
                             $routeName = $attributeInstance->name;
+                            $withTrashed = $attributeInstance->withTrashed;
+                            $scopeBindings = $attributeInstance->scopeBindings;
+                            $where = $attributeInstance->resolveWhereX();
                             
                             if ($routeVerbs === '*') {
                                 $routeVerbs = 'any';
@@ -162,13 +169,10 @@ final class RunSweetApiCommand extends StartCommand
                                 $routeMiddleware[($attributeInstance->exclude ? 'exclude' : 'add')][] = $name;
                             }
                         }
-                        else if ($attributeInstance instanceof Trashed) {
-                            $withTrashed = true;
-                        }
                     }
 
                     if (!is_null($routeVerbs)) {
-                        $endpointsStruct[$idx]['methods'][] = ['methodName' => $methodName, 'routeVerbs' => $routeVerbs, 'routePath' => $routePath, 'routeName' => $routeName, 'middleware' => $routeMiddleware, 'withTrashed' => $withTrashed];
+                        $endpointsStruct[$idx]['methods'][] = ['methodName' => $methodName, 'routeVerbs' => $routeVerbs, 'routePath' => $routePath, 'routeName' => $routeName, 'middleware' => $routeMiddleware, 'where' => $where, 'withTrashed' => $withTrashed, 'scopeBindings' => $scopeBindings];
                     }
                 }
             }
@@ -201,7 +205,16 @@ final class RunSweetApiCommand extends StartCommand
                 }
 
                 $item .= str_repeat("\t", $tCount++) . "Route::prefix('" . $controllerData['prefix'] . "')->group(function () {\n";
+
+                if (!empty($controllerData['name'])) {
+                    $item .= str_repeat("\t", $tCount++) . "Route::name('" . $controllerData['name'] . "')->group(function () {\n";
+                }
+
                 $item .= str_repeat("\t", $tCount++) . "Route::controller(" . $controllerData['controller'] . "::class)->group(function () {\n";
+
+                if (!is_null($controllerData['scopeBindings'])) {
+                    $item .= str_repeat("\t", $tCount++) . "Route::" . ($controllerData['scopeBindings'] ? 'scopeBindings()' : 'withoutScopedBindings()') . "->group(function () {\n";
+                }
 
                 foreach ($controllerData['methods'] as $idx => $methodData) {
                     if (is_string($methodData['routeVerbs'])) {
@@ -216,7 +229,11 @@ final class RunSweetApiCommand extends StartCommand
 
                     if ($methodData['routeName'] !== '') {
                         $item .= "->name('" . $methodData['routeName'] . "')";
-                    } 
+                    }
+                    
+                    if ($methodData['where'] !== '') {
+                        $item .= $methodData['where'];
+                    }
 
                     if (count($methodData['middleware']['add']) > 0) {
                         $item .= "->middleware([" . implode(',', $methodData['middleware']['add']) . "])";
@@ -230,7 +247,19 @@ final class RunSweetApiCommand extends StartCommand
                         $item .= "->withTrashed()";
                     }
 
+                    if (!is_null($methodData['scopeBindings'])) {
+                        $item .= ($methodData['scopeBindings'] ? "->scopeBindings()" : "->withoutScopedBindings()");
+                    }
+
                     $item .= ";\n";
+                }
+
+                if (!empty($controllerData['name'])) {
+                    $item .= str_repeat("\t", --$tCount) . "});\n";
+                }
+
+                if (!is_null($controllerData['scopeBindings'])) {
+                    $item .= str_repeat("\t", --$tCount) . "});\n";
                 }
 
                 $item .= str_repeat("\t", --$tCount) . "});\n";
