@@ -18,7 +18,7 @@ class ScrapedItems implements \Iterator
     final public function addItem(array $item) : void
     {
         foreach (array_keys($item) as $key) {
-            $item[$key] = trim($item[$key], " \t\n");
+            $item[$key] = is_string($item[$key]) ? trim($item[$key], " \t\n") : $item[$key];
         }
 
         $item['__md5__'] = hash('md5', implode('', array_keys($item)) . implode('', array_values($item)));

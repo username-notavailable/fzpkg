@@ -43,7 +43,7 @@ class BaseScraper
         return ScrapeResult::NO_DATA;
     }
 
-    public function finalize(RunScraperResult $result, string $outputDir, string $fileName, string $className, string $search) : void
+    public function finalize(RunScraperResult $result, string $outputDir, string $fileName, string $className, string $search, string $json) : FinalizeResult
     {
         /*if (!Schema::hasTable($className)) {
             Schema::create($className, function (Blueprint $table) {
@@ -63,7 +63,7 @@ class BaseScraper
             
         }*/
 
-        return;
+        return new FinalizeResult();
     }
 
     public static function getSite() : string

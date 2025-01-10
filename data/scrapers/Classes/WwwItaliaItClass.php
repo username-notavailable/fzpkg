@@ -111,10 +111,31 @@ class WwwItaliaItClass extends BaseScraper
 
             foreach ($data['results'][0]['hits'] as $article) {
                 $item['image'] = $article['image'];
-                $item['time'] = '';
                 $item['title'] = $article['title'];
-                $item['link'] = $article['url'];;
-                $item['tags'] = implode(', ', $article['_tags']);
+                $item['link'] = $article['url'];
+                //$item['tags'] = implode(', ', $article['_tags']);
+
+                /*
+                 * Formato geoloc
+                
+                array:8 [
+                    0 => array:2 [
+                      "lat" => 44.3635125
+                      "lng" => 7.8629325
+                    ]
+                    1 => array:2 [
+                      "lat" => 44.64724
+                      "lng" => 7.858192
+                    ]
+                    2 => array:2 [
+                      "lat" => 44.9066934
+                      "lng" => 7.6742705
+                    ]
+                    ...
+                  ]
+                */
+
+                $item['geoloc'] = serialize($article['_geoloc']);
 
                 $this->scrapedItems->addItem($item);
 

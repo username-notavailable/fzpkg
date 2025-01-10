@@ -45,33 +45,31 @@ class ActiveMqStompConsumer extends MicroserviceConsumer
             $client->setVhostname($connectionData['client']['host']);
         }
 
-        if ($connectionData['client']['heartbeatSend'] > 0 || $connectionData['client']['heartbeatReceive'] > 0) {
+        if ($connectionData['useHeartbeat'] && ($connectionData['client']['heartbeatSend'] > 0 || $connectionData['client']['heartbeatReceive'] > 0)) {
             $client->setHeartbeat($connectionData['client']['heartbeatSend'], $connectionData['client']['heartbeatReceive']);
 
-            $emitter = new HeartbeatEmitter($client->getConnection(), $connectionData['heartbeatIntervalUsage']);
+            $emitter = new HeartbeatEmitter($client->getConnection(), $connectionData['client']['heartbeatIntervalUsage']);
             $client->getConnection()->getObservers()->addObserver($emitter);
         }
 
         // ---
 
-        if (!is_null($connectionData['client']['host'])) {
-            $client->setVhostname($connectionData['client']['host']);
+        if ($connectionData['client']['receiptWait'] > 0) {
+            $client->setReceiptWait($connectionData['client']['receiptWait']);
         }
 
-        if (!is_null($connectionData['client']['host'])) {
-            $client->setVhostname($connectionData['client']['host']);
+        if (is_null($connectionData['client']['clientId'])) {
+            $connectionData['client']['clientId'] = uniqid($microserviceName . '.activemq.stomp');
         }
-        
-        
-        if ($connectionData['useHeartbeat']) {
 
-        }
+        $client->setClientId($connectionData['client']['clientId']);
         
-        if ($connectionData['checkServerAlive']) {
-            // in order to simplify the process of checking for server signals we use the ServerAliveObserver
-            $observer = new ServerAliveObserver();
+        if ($connectionData['checkServerAlive'] && $connectionData['client']['serverAliveIntervalUsage'] > 0) {
+            $observer = new ServerAliveObserver($connectionData['client']['serverAliveIntervalUsage']);
             $client->getConnection()->getObservers()->addObserver($observer);
         }
+
+        $client->setSync($connectionData['client']['sync']);
     }
 
     public function run() : void

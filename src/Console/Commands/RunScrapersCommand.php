@@ -91,7 +91,7 @@ final class RunScrapersCommand extends BaseCommand
                                     $scrapeResult = $instance->doScrape($search);
                                 }catch (\Throwable $e) {
                                     $this->outLabelledError('Exception: ' . $e->getMessage());
-                                    $instance->finalize(RunScraperResult::SCRAPER_EXCEPTION, $outputDir, $fileName, $className, $search);
+                                    $instance->finalize(RunScraperResult::SCRAPER_EXCEPTION, $outputDir, $fileName, $className, $search, '[]');
                                     $scrapeResult = null;
                                 }
                                 
@@ -100,7 +100,7 @@ final class RunScrapersCommand extends BaseCommand
                             
                                     $itemsStr = $instance->getScrapedItems()->toJson();
                                     $itemsCount = $instance->getScrapedItems()->count();
-    
+
                                     if ($itemsCount > 0) {
                                         $this->newLine();
                                     }
@@ -112,12 +112,16 @@ final class RunScrapersCommand extends BaseCommand
     
                                         if (!$fileItemsStr) {
                                             $this->outLabelledError('File "'. basename($outputFile) . '" not updated (read error)');
-                                            $instance->finalize(RunScraperResult::READ_FILE_ERROR, $outputDir, $fileName, $className, $search);
+                                            
+                                            $finalizeResult = RunScraperResult::READ_FILE_ERROR;
+                                            $finalizeJson = '[]';
                                         }
                                         else {
                                             if (hash('md5', $itemsStr) === hash('md5', $fileItemsStr)) {
                                                 $this->outLabelledInfo('File "'. basename($outputFile) . '" not updated (' . $itemsCount  . ' items unchanged)');
-                                                $instance->finalize(RunScraperResult::FILE_NO_NEED_UPDATE, $outputDir, $fileName, $className, $search);
+                                                
+                                                $finalizeResult = RunScraperResult::FILE_NO_NEED_UPDATE;
+                                                $finalizeJson = $itemsStr;
                                             }
                                             else {
                                                 $writeFile = true;
@@ -138,7 +142,9 @@ final class RunScrapersCommand extends BaseCommand
                                             }
     
                                             $this->outLabelledError($message);
-                                            $instance->finalize(RunScraperResult::WRITE_FILE_ERROR, $outputDir, $fileName, $className, $search);
+                                            
+                                            $finalizeResult = RunScraperResult::WRITE_FILE_ERROR;
+                                            $finalizeJson = '[]';
                                         }
                                         else {
                                             if ($outputFileExists) {
@@ -151,17 +157,33 @@ final class RunScrapersCommand extends BaseCommand
                                             }
     
                                             $this->outLabelledSuccess($message);
-                                            $instance->finalize($result, $outputDir, $fileName, $className, $search);
+
+                                            $finalizeResult = $result;
+                                            $finalizeJson = $itemsStr;
                                         }
                                     }
                                 }
                                 else if ($scrapeResult === ScrapeResult::PAGE_MODIFIED) {
                                     $this->outLabelledWarning('>>> The page structure was modified <<<');
-                                    $instance->finalize(RunScraperResult::PAGE_MODIFIED, $outputDir, $fileName, $className, $search);
+                                    $finalizeResult = RunScraperResult::PAGE_MODIFIED;
+                                    $finalizeJson = '[]';
                                 }
                                 else {
                                     $this->outLabelledWarning('>>> No data found <<<');
-                                    $instance->finalize(RunScraperResult::NO_DATA, $outputDir, $fileName, $className, $search);
+                                    $finalizeResult = RunScraperResult::NO_DATA;
+                                    $finalizeJson = '[]';
+                                }
+
+                                $finalizeResult = $instance->finalize($finalizeResult, $outputDir, $fileName, $className, $search, $finalizeJson);
+
+                                
+                                if ($finalizeResult->message !== '') {
+                                    if ($finalizeResult->hasError) {
+                                        $this->outLabelledWarning('>>> Finalize: ' . $finalizeResult->message . ' <<<');
+                                    }
+                                    else {
+                                        $this->outLabelledSuccess($finalizeResult->message);
+                                    }
                                 }
                             }
     
