@@ -86,6 +86,27 @@ final class RunScrapersCommand extends BaseCommand
                             if ($outputFileExists && in_array('files', $this->option('skip'))) {
                                 $this->outLabelledInfo('--skip=files (File "'. basename($outputFile) . '" already exists; search "' . $search . '" skipped)');
                             }
+                            /*else if ($outputFileExists && $this->option('force-finalize')) {
+                                $this->outLabelledInfo('File "'. basename($outputFile) . '" already exists; --force-finalize is set... call finalize())');
+
+                                $finalizeJson = file_get_contents($outputFile);
+    
+                                if (!$finalizeJson) {
+                                    $this->outLabelledError('Read file "'. basename($outputFile) . '" error');
+                                }
+                                else {
+                                    $finalizeResult = $instance->finalize(RunScraperResult::FILE_NO_NEED_UPDATE, $outputDir, $fileName, $className, $search, $finalizeJson);
+
+                                    if ($finalizeResult->message !== '') {
+                                        if ($finalizeResult->hasError) {
+                                            $this->outLabelledWarning('>>> Finalize: ' . $finalizeResult->message . ' <<<');
+                                        }
+                                        else {
+                                            $this->outLabelledSuccess($finalizeResult->message);
+                                        }
+                                    }
+                                }
+                            }*/
                             else {
                                 try {
                                     $scrapeResult = $instance->doScrape($search);
@@ -168,15 +189,21 @@ final class RunScrapersCommand extends BaseCommand
                                     $finalizeResult = RunScraperResult::PAGE_MODIFIED;
                                     $finalizeJson = '[]';
                                 }
+                                else if ($scrapeResult === ScrapeResult::HTTP_REQUEST_ERROR) {
+                                    $this->outLabelledWarning('>>> HTTP request error <<<');
+                                    $finalizeResult = RunScraperResult::HTTP_REQUEST_ERROR;
+                                    $finalizeJson = '[]';
+                                }
                                 else {
                                     $this->outLabelledWarning('>>> No data found <<<');
                                     $finalizeResult = RunScraperResult::NO_DATA;
                                     $finalizeJson = '[]';
                                 }
 
+                                $this->outLabelledInfo('Run finalize...');
+
                                 $finalizeResult = $instance->finalize($finalizeResult, $outputDir, $fileName, $className, $search, $finalizeJson);
 
-                                
                                 if ($finalizeResult->message !== '') {
                                     if ($finalizeResult->hasError) {
                                         $this->outLabelledWarning('>>> Finalize: ' . $finalizeResult->message . ' <<<');
@@ -184,6 +211,9 @@ final class RunScrapersCommand extends BaseCommand
                                     else {
                                         $this->outLabelledSuccess($finalizeResult->message);
                                     }
+                                }
+                                else {
+                                    $this->outLabelledSuccess('Finish');
                                 }
                             }
     

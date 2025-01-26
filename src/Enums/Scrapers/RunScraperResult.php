@@ -12,4 +12,5 @@ enum RunScraperResult
     case WRITE_FILE_ERROR;
     case READ_FILE_ERROR;
     case SCRAPER_EXCEPTION;
+    case HTTP_REQUEST_ERROR;
 }

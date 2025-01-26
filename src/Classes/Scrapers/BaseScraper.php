@@ -45,24 +45,6 @@ class BaseScraper
 
     public function finalize(RunScraperResult $result, string $outputDir, string $fileName, string $className, string $search, string $json) : FinalizeResult
     {
-        /*if (!Schema::hasTable($className)) {
-            Schema::create($className, function (Blueprint $table) {
-                $table->id();
-                $table->string('md5')->index();
-                $table->text('search')->index();
-                $table->text('image')->nullable();
-                $table->string('time');
-                $table->text('title')->index();
-                $table->text('link')->index();
-                $table->text('tags')->index();
-                $table->timestamps();
-            });
-        }
-
-        if (in_array($result, [ RunScraperResult::FILE_CREATED, RunScraperResult::FILE_UPDATED ])) {
-            
-        }*/
-
         return new FinalizeResult();
     }
 
