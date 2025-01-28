@@ -5,7 +5,8 @@
     "require": {
         "php": "^8.2",
         "guzzlehttp/guzzle": "^7.9",
-        "cebe/php-openapi": "^1.7"
+        "cebe/php-openapi": "^1.7",
+        "firebase/php-jwt": "^6.11"
     },
     "license": "MIT",
     "autoload": {
