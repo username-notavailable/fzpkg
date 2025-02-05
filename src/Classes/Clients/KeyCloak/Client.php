@@ -91,7 +91,7 @@ class Client
         }
     }
 
-    public function doSignedJwtAuthorization(string $realm, string $clientId, string $pvtKeyPath,  array $payload = [], string $signatureAlgorithm = 'RS256') : mixed
+    public function doClientSignedJwtAuthorization(string $realm, string $clientId, string $pvtKeyPath,  array $payload = [], string $signatureAlgorithm = 'RS256') : mixed
     {
         try
         {
