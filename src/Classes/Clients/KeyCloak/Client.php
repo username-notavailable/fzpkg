@@ -29,41 +29,64 @@ class Client
         $this->openIdConfigurations = [];
     }
 
-    public function getOpenIdConfiguration(string $realm) : mixed
+    public function loadOpenIdConfiguration(string $realm) : bool
     {
         $response = $this->makeHttpRequest('GET', $this->keyCloakHost . '/realms/' . $realm . '/.well-known/openid-configuration');
 
-        if ($response !== false) {
+        if ($response->getStatusCode() === 200) {
             $response = json_decode((string) $response->getBody(), true);
             $this->openIdConfigurations[$realm] = $response;
+            return true;
         }
 
-        return $response;
+        return false;
+    }
+
+    public function getOpenIdConfiguration(string $realm) : mixed
+    {
+        if (array_key_exists($realm, $this->openIdConfigurations)) {
+            return $this->openIdConfigurations[$realm];
+        }
+        else {
+            if ($this->loadOpenIdConfiguration($realm)) {
+                return $this->openIdConfigurations[$realm];
+            }
+            else {
+                return false;
+            }
+        }
+    }
+
+    public function loadRealmCert(string $realm) : mixed
+    {
+        if (!array_key_exists($realm, $this->openIdConfigurations) && !$this->loadOpenIdConfiguration($realm)) {
+            Log::error(__METHOD__ . ': Get realm config for realm "' . $realm . '" failed');
+            return false;
+        }
+        
+        $response = $this->makeHttpRequest('GET', $this->openIdConfigurations[$realm]['jwks_uri'], []);
+
+        if ($response->getStatusCode() === 200) {
+            return new RequestResult($response, json_decode((string) $response->getBody(), true));
+        }
+
+        return new RequestResult($response, []);
     }
 
     public function doClientSecretAuthentication(string $realm, string $clientId, string $clientSecret) : mixed
     {
         try
         {
-            if (array_key_exists($realm, $this->openIdConfigurations)) {
-                $realmConfig = $this->openIdConfigurations[$realm];
-            }
-            else {
-                $realmConfig = $this->getOpenIdConfiguration($realm);
-    
-                if (!$realmConfig) {
-                    Log::error(__METHOD__ . ': Get realm config for realm "' . $realm . '" failed');
-                    return false;
-                }
-            }
-    
-            if (!in_array('client_credentials', $realmConfig['grant_types_supported'])) {
-                Log::error(__METHOD__ . ': Grant type "client_credentials" not supported for realm "' . $realm . '"');
+            if (!array_key_exists($realm, $this->openIdConfigurations) && !$this->loadOpenIdConfiguration($realm)) {
+                Log::error(__METHOD__ . ': Get realm config for realm "' . $realm . '" failed');
                 return false;
             }
     
-            $tokenEndpoint = $realmConfig['token_endpoint'];
-    
+            if (!in_array('client_credentials', $this->openIdConfigurations[$realm]['grant_types_supported'])) {
+                Log::error(__METHOD__ . ': Grant type "client_credentials" not supported for realm "' . $realm . '"');
+                return false;
+            }
+
             $data = [
                 'client_id' => $clientId,
                 'client_secret' => $clientSecret,
@@ -72,7 +95,7 @@ class Client
     
             $body = http_build_query($data);
     
-            $response = $this->makeHttpRequest('POST', $tokenEndpoint, [
+            $response = $this->makeHttpRequest('POST', $this->openIdConfigurations[$realm]['token_endpoint'], [
                 'body' => $body,
                 'headers' => [
                     'ACCEPT' => '*/*',
@@ -80,11 +103,11 @@ class Client
                 ]
             ]);
     
-            if ($response !== false) {
-                $response = json_decode((string) $response->getBody(), true);
+            if ($response->getStatusCode() === 200) {
+                return new RequestResult($response, json_decode((string) $response->getBody(), true));
             }
     
-            return $response;
+            return new RequestResult($response, []);
         }catch (\Throwable $e) {
             Log::error(__METHOD__ . ' (realm = "' . $realm . '") Exception: ' . $e->getMessage());
             return false;
@@ -95,25 +118,16 @@ class Client
     {
         try
         {
-            if (array_key_exists($realm, $this->openIdConfigurations)) {
-                $realmConfig = $this->openIdConfigurations[$realm];
-            }
-            else {
-                $realmConfig = $this->getOpenIdConfiguration($realm);
-    
-                if (!$realmConfig) {
-                    Log::error(__METHOD__ . ': Get realm config for realm "' . $realm . '" failed');
-                    return false;
-                }
-            }
-    
-            if (!in_array('client_credentials', $realmConfig['grant_types_supported'])) {
-                Log::error(__METHOD__ . ': Grant type "client_credentials" not supported for realm "' . $realm . '"');
+            if (!array_key_exists($realm, $this->openIdConfigurations) && !$this->loadOpenIdConfiguration($realm)) {
+                Log::error(__METHOD__ . ': Get realm config for realm "' . $realm . '" failed');
                 return false;
             }
     
-            $tokenEndpoint = $realmConfig['token_endpoint'];
-    
+            if (!in_array('client_credentials', $this->openIdConfigurations[$realm]['grant_types_supported'])) {
+                Log::error(__METHOD__ . ': Grant type "client_credentials" not supported for realm "' . $realm . '"');
+                return false;
+            }
+
             $iat = time();
             $exp = $iat + 300;
     
@@ -139,7 +153,7 @@ class Client
     
             $body = http_build_query($data);
     
-            $response = $this->makeHttpRequest('POST', $tokenEndpoint, [
+            $response = $this->makeHttpRequest('POST', $this->openIdConfigurations[$realm]['token_endpoint'], [
                 'body' => $body,
                 'headers' => [
                     'Accept' => '*/*',
@@ -147,11 +161,11 @@ class Client
                 ]
             ]);
     
-            if ($response !== false) {
-                $response = json_decode((string) $response->getBody(), true);
+            if ($response->getStatusCode() === 200) {
+                return new RequestResult($response, json_decode((string) $response->getBody(), true));
             }
     
-            return $response;
+            return new RequestResult($response, []);
         }catch (\Throwable $e) {
             Log::error(__METHOD__ . ' (realm = "' . $realm . '") Exception: ' . $e->getMessage());
             return false;
@@ -162,25 +176,16 @@ class Client
     {
         try
         {
-            if (array_key_exists($realm, $this->openIdConfigurations)) {
-                $realmConfig = $this->openIdConfigurations[$realm];
-            }
-            else {
-                $realmConfig = $this->getOpenIdConfiguration($realm);
-    
-                if (!$realmConfig) {
-                    Log::error(__METHOD__ . ': Get realm config for realm "' . $realm . '" failed');
-                    return false;
-                }
-            }
-    
-            if (!in_array('client_credentials', $realmConfig['grant_types_supported'])) {
-                Log::error(__METHOD__ . ': Grant type "client_credentials" not supported for realm "' . $realm . '"');
+            if (!array_key_exists($realm, $this->openIdConfigurations) && !$this->loadOpenIdConfiguration($realm)) {
+                Log::error(__METHOD__ . ': Get realm config for realm "' . $realm . '" failed');
                 return false;
             }
     
-            $tokenEndpoint = $realmConfig['token_endpoint'];
-    
+            if (!in_array('client_credentials', $this->openIdConfigurations[$realm]['grant_types_supported'])) {
+                Log::error(__METHOD__ . ': Grant type "client_credentials" not supported for realm "' . $realm . '"');
+                return false;
+            }
+
             $iat = time();
             $exp = $iat + 300;
     
@@ -206,7 +211,7 @@ class Client
     
             $body = http_build_query($data);
     
-            $response = $this->makeHttpRequest('POST', $tokenEndpoint, [
+            $response = $this->makeHttpRequest('POST', $this->openIdConfigurations[$realm]['token_endpoint'], [
                 'body' => $body,
                 'headers' => [
                     'Accept' => '*/*',
@@ -214,11 +219,11 @@ class Client
                 ]
             ]);
     
-            if ($response !== false) {
-                $response = json_decode((string) $response->getBody(), true);
+            if ($response->getStatusCode() === 200) {
+                return new RequestResult($response, json_decode((string) $response->getBody(), true));
             }
     
-            return $response;
+            return new RequestResult($response, []);
         }catch (\Throwable $e) {
             Log::error(__METHOD__ . ' (realm = "' . $realm . '") Exception: ' . $e->getMessage());
             return false;
@@ -266,10 +271,11 @@ class Client
                 $requestCount++;
 
                 if ($requestCount === $this->requestCountMax) {
-                    return false;
+                    $requestDone = true;
                 }
-
-                sleep($this->requestSleepValue);
+                else {
+                    sleep($this->requestSleepValue);
+                }
             }
 
         }while(!$requestDone);
