@@ -8,11 +8,13 @@ use Psr\Http\Message\ResponseInterface;
 
 class RequestResult
 {
-    public ResponseInterface $rawResponse;
+    public bool $fromCache;
+    public ?ResponseInterface $rawResponse;
     public array $json;
 
-    public function __construct(ResponseInterface $rawResponse, array $json = [])
+    public function __construct(bool $fromCache, ?ResponseInterface $rawResponse, array $json = [])
     {
+        $this->fromCache = $fromCache;
         $this->rawResponse = $rawResponse;
         $this->json = $json;
     }
