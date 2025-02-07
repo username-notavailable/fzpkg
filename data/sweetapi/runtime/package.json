@@ -1,0 +1,11 @@
+{
+    "private": true,
+    "type": "module",
+    "scripts": {
+    },
+    "devDependencies": {
+    },
+    "dependencies": {
+        "chokidar": "^4.0.3"
+    }
+}

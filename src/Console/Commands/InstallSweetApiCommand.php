@@ -47,15 +47,33 @@ final class InstallSweetApiCommand extends BaseCommand
             ->run(function ($type, $output) {
                 $this->output->write($output);
             }) === 0) {
-                if ((new Process(['php', 'artisan', 'migrate'], $newSweetApiPath, []))
+                if ((new Process(['npm', 'install'], $newSweetApiPath, []))
                     ->setTimeout(null)
                     ->run(function ($type, $output) {
                         $this->output->write($output);
                     }) === 0) {
-                        $this->outLabelledSuccess('Fuzzy SweetAPI "' . $apiName . '" installed');
+                        if ((new Process(['php', 'artisan', 'key:generate'], $newSweetApiPath, []))
+                            ->setTimeout(null)
+                            ->run(function ($type, $output) {
+                                $this->output->write($output);
+                            }) === 0) {
+                                if ((new Process(['php', 'artisan', 'migrate'], $newSweetApiPath, []))
+                                    ->setTimeout(null)
+                                    ->run(function ($type, $output) {
+                                        $this->output->write($output);
+                                    }) === 0) {
+                                        $this->outLabelledSuccess('Fuzzy SweetAPI "' . $apiName . '" installed');
+                                }
+                                else {
+                                    $this->outLabelledWarning('Fuzzy SweetAPI "' . $apiName . '" installed but "php artisan migrate" command failed, run it manually');
+                                }
+                        }
+                        else {
+                            $this->outLabelledWarning('Fuzzy SweetAPI "' . $apiName . '" installed but "php artisan key:generate" command failed, run it manually');
+                        }
                 }
                 else {
-                    $this->outLabelledWarning('Fuzzy SweetAPI "' . $apiName . '" installed but "php artisan migrate" command failed, run it manually');
+                    $this->outLabelledWarning('Fuzzy SweetAPI "' . $apiName . '" installed but "npm install" command failed, run it manually');
                 }
         }
         else {
