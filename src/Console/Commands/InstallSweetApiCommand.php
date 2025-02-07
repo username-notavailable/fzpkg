@@ -39,6 +39,8 @@ final class InstallSweetApiCommand extends BaseCommand
              $filesystem->chmod($item, 0755);
         }
 
+        $filesystem->move($newSweetApiPath . '/.env.default', $newSweetApiPath . '/.env');
+
         $filesystem->chmod($newSweetApiPath . '/bootstrap/cache', 0755);
         $filesystem->chmod($newSweetApiPath . '/.env', 0600);
 
