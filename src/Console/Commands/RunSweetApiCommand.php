@@ -24,8 +24,8 @@ final class RunSweetApiCommand extends StartCommand
             $signature = str_replace('octane:start', 'fz:sweetapi:run { --disable-swagger : Disable swagger documentation }', $this->signature);
         }
 
-        $signature = preg_replace('@{--host=[^}]+}@m', '', $signature);
-        $signature = preg_replace('@{--port=[^}]+}@m', '', $signature);
+        //$signature = preg_replace('@{--host=[^}]+}@m', '', $signature);
+        //$signature = preg_replace('@{--port=[^}]+}@m', '', $signature);
 
         $this->signature = $signature;
 
@@ -59,7 +59,7 @@ final class RunSweetApiCommand extends StartCommand
             $this->createRoutesFile($apiDirectoryPath, Utils::makeFilePath($apiDirectoryPath, 'routes', 'api.php'));
         }
 
-        $this->getDefinition()->addOption(new InputOption('--host', null, InputOption::VALUE_REQUIRED, ''));
+        /*$this->getDefinition()->addOption(new InputOption('--host', null, InputOption::VALUE_REQUIRED, ''));
         $this->getDefinition()->addOption(new InputOption('--port', null, InputOption::VALUE_REQUIRED, ''));
 
         $urlParts = parse_url(config('app.url'));
@@ -72,7 +72,7 @@ final class RunSweetApiCommand extends StartCommand
         $port = isset($urlParts['port']) ? $urlParts['port'] : 80;
 
         $this->getDefinition()->getOption('host')->setDefault($host);
-        $this->getDefinition()->getOption('port')->setDefault($port);
+        $this->getDefinition()->getOption('port')->setDefault($port);*/
 
         parent::handle();
     }
