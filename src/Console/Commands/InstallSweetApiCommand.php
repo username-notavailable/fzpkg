@@ -44,42 +44,38 @@ final class InstallSweetApiCommand extends BaseCommand
         $filesystem->chmod($newSweetApiPath . '/bootstrap/cache', 0755);
         $filesystem->chmod($newSweetApiPath . '/.env', 0600);
 
-        if ((new Process(['composer', 'install'], $newSweetApiPath, ['COMPOSER_MEMORY_LIMIT' => '-1']))
-            ->setTimeout(null)
-            ->run(function ($type, $output) {
-                $this->output->write($output);
-            }) === 0) {
-                if ((new Process(['npm', 'install'], $newSweetApiPath, []))
-                    ->setTimeout(null)
-                    ->run(function ($type, $output) {
-                        $this->output->write($output);
-                    }) === 0) {
-                        if ((new Process(['php', 'artisan', 'key:generate'], $newSweetApiPath, []))
-                            ->setTimeout(null)
-                            ->run(function ($type, $output) {
-                                $this->output->write($output);
-                            }) === 0) {
-                                if ((new Process(['php', 'artisan', 'migrate'], $newSweetApiPath, []))
-                                    ->setTimeout(null)
-                                    ->run(function ($type, $output) {
-                                        $this->output->write($output);
-                                    }) === 0) {
-                                        $this->outLabelledSuccess('Fuzzy SweetAPI "' . $apiName . '" installed');
-                                }
-                                else {
-                                    $this->outLabelledWarning('Fuzzy SweetAPI "' . $apiName . '" installed but "php artisan migrate" command failed, run it manually');
-                                }
-                        }
-                        else {
-                            $this->outLabelledWarning('Fuzzy SweetAPI "' . $apiName . '" installed but "php artisan key:generate" command failed, run it manually');
-                        }
-                }
-                else {
-                    $this->outLabelledWarning('Fuzzy SweetAPI "' . $apiName . '" installed but "npm install" command failed, run it manually');
-                }
+        $commands = [];
+        
+        $commands[] = ['cmd' => ['composer', 'install'], 'env' => ['COMPOSER_MEMORY_LIMIT' => '-1']];
+        $commands[] = ['cmd' => ['npm', 'install'], 'env' => []];
+        $commands[] = ['cmd' => ['php', 'artisan', 'config:clear'], 'env' => []];
+        $commands[] = ['cmd' => ['php', 'artisan', 'config:cache'], 'env' => []];
+        $commands[] = ['cmd' => ['php', 'artisan', 'key:generate'], 'env' => []];
+        $commands[] = ['cmd' => ['php', 'artisan', 'migrate'], 'env' => []];
+
+        $done = true;
+
+        for ($i = 0; $i < count($commands); $i++) {
+            if ((new Process($commands[$i]['cmd'], $newSweetApiPath, $commands[$i]['env']))
+                ->setTimeout(null)
+                ->run(function ($type, $output) {
+                    $this->output->write($output);
+                }) !== 0) {
+                    $done = false;
+
+                    $this->outLabelledWarning('Fuzzy SweetAPI "' . $apiName . '" installed but init commands failed, run those manually...');
+
+                    for ($i2 = $i; $i2 < count($commands); $i2++) {
+                        echo implode(' ', $commands[$i2]['cmd']) . PHP_EOL;
+                    }
+
+                    echo PHP_EOL;
+                    break;
+            }
         }
-        else {
-            $this->outLabelledWarning('Fuzzy SweetAPI "' . $apiName . '" installed but "composer install" command failed, run it manually');
+
+        if ($done) {
+            $this->outLabelledSuccess('Fuzzy SweetAPI "' . $apiName . '" installed');
         }
     }
 }
