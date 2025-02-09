@@ -28,7 +28,7 @@ class SwaggerEndpoints extends Endpoints
     {
         $jsonFilePath = base_path(env('SWAGGER_FILE_PATH', 'sweetapi/swagger.json'));
     
-        if (!file_exists($jsonFilePath)) {
+        if (!file_exists($jsonFilePath) || (env('APP_ENV') === 'local' && env('SWAGGER_REPLACE_FILE'))) {
             $this->generateSwaggerJson(parse_url(url()->current()));
         }
 
@@ -224,7 +224,7 @@ class SwaggerEndpoints extends Endpoints
 
                 $json = Writer::writeToJson($cebe, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
-                file_put_contents(base_path('sweetapi/swagger.json'), $json);
+                file_put_contents(base_path(env('SWAGGER_FILE_PATH', 'sweetapi/swagger.json')), $json);
             }
         }
         catch (Throwable $e) {
