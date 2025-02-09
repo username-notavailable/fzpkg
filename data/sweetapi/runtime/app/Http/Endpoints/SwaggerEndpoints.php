@@ -11,7 +11,7 @@ use cebe\openapi\spec\Tag as OpenApiTag;
 use ReflectionClass;
 use Throwable;
 
-#[RoutePrefix(path: 'swagger')]
+#[RoutePrefix(path: '/swagger')]
 class SwaggerEndpoints extends Endpoints
 {
     #[Get(path: '/docs', name: 'swagger_index')]
@@ -26,7 +26,7 @@ class SwaggerEndpoints extends Endpoints
     #[Get(path: '/json', name: 'swagger_json')]
     public function json()
     {
-        $jsonFilePath = base_path('sweetapi/swagger.json');
+        $jsonFilePath = base_path(env('SWAGGER_FILE_PATH', 'sweetapi/swagger.json'));
     
         if (!file_exists($jsonFilePath)) {
             $this->generateSwaggerJson(parse_url(url()->current()));
@@ -44,9 +44,6 @@ class SwaggerEndpoints extends Endpoints
             if ($urlParts['scheme'] === 'https') {
                 $schemes[] = 'https';
             }
-
-            $apiName = basename(base_path());
-            $apiPrefix = '/' . strtolower($apiName);
 
             $classes = glob(__DIR__ . DIRECTORY_SEPARATOR . '?*Endpoints.php');
 
@@ -131,7 +128,7 @@ class SwaggerEndpoints extends Endpoints
                 }
 
                 $info = [
-                    'title' => env('SWEETAPI_TITLE', 'SweetAPI "' . $apiName . '"'),
+                    'title' => env('SWEETAPI_TITLE', 'SweetAPI'),
                     'summary' => env('SWEETAPI_SUMMARY', ''),
                     'description' => env('SWEETAPI_DESCRIPTION', ''),
                     'termsOfService' => env('SWEETAPI_TERMS_OF_SERVICE', ''),
@@ -153,14 +150,15 @@ class SwaggerEndpoints extends Endpoints
                     //'openapi' => '3.0.2',
                     'info' => $info,
                     'host' => $urlParts['host'] . ($urlParts['port'] === 80 ? '' : ':' . $urlParts['port']),
-                    'basePath' => $apiPrefix,
+                    'basePath' => '/',
                     'tags' => [],
                     'schemes' => $schemes,
                     'paths' => [],
                     'externalDocs' => [
                         'url' => env('SWEETAPI_EXT_DOC_URL', ''),
                         'description' => env('SWEETAPI_EXT_DESCRIPTION', '')
-                    ]
+                    ],
+                    'x-routes' => []
                 ];
 
                 $endpointsStruct = array_reverse($endpointsStruct);
@@ -171,10 +169,10 @@ class SwaggerEndpoints extends Endpoints
                         $pathName = '';
 
                         if (trim($controllerData['prefix'], '/') !== '') {
-                            $pathName .= '/' . trim($controllerData['prefix'], '/') . '/';
+                            $pathName .= trim($controllerData['prefix'], ' ');
                         }
 
-                        $pathName .= trim($methodData['routePath'], ' /');
+                        $pathName .= trim($methodData['routePath'], ' ');
                         
                         if (is_string($methodData['routeVerbs'])) {
                             $verbs = ['get', 'post', 'put', 'patch', 'options', 'delete'];
@@ -204,7 +202,7 @@ class SwaggerEndpoints extends Endpoints
                             $pathItemData[$verb] = [
                                 'summary' => $methodData['routeSummary'],
                                 'description' => $methodData['routeDescription'],
-                                'operationId' => $methodData['routeName'] . '_###_' . $verb, //### FIXME: Ma se è il nome della rotta???
+                                'operationId' => $methodData['routeName'] . '_###_' . $verb,
                                 'consumes' => $methodData['routeConsumes'],
                                 'produces' => array_keys($produces),
                                 'tags' => $methodData['routeTags'],
@@ -218,6 +216,7 @@ class SwaggerEndpoints extends Endpoints
                         }
 
                         $openapi['paths'][$pathName] = new OpenApiPathItem($pathItemData);
+                        $openapi['x-routes'][$methodData['routeName']] = $pathName;
                     }
                 }
 
