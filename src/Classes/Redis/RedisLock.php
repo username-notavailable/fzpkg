@@ -1,5 +1,7 @@
 <?php
 
+namespace Fuzzy\Fzpkg\Classes\Redis;
+
 class RedisLock
 {
     static public function lock($redis, $key, $value = "true") 
@@ -32,6 +34,5 @@ class RedisLock
         $redis->multi();
         $redis->del("lock:" . $key);
         $redis->exec();
-
     }
 }
