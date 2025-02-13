@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Redis;
 use GuzzleHttp\Exception\BadResponseException;
 use Firebase\JWT\JWT;
 use Fuzzy\Fzpkg\Classes\Redis\RedisLock;
+use Fuzzy\Fzpkg\Classes\Clients\KeyCloak\Classes\RequestResult;
 
 class Client
 {

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Fuzzy\Fzpkg\Classes\Clients\KeyCloak;
+namespace Fuzzy\Fzpkg\Classes\Clients\KeyCloak\Classes;
 
 use Psr\Http\Message\ResponseInterface;
 
