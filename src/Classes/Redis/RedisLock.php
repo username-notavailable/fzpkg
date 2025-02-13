@@ -1,10 +1,14 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Fuzzy\Fzpkg\Classes\Redis;
+
+use Illuminate\Redis\Connections\Connection;
 
 class RedisLock
 {
-    static public function lock($redis, $key, $value = "true") 
+    static public function lock(Connection $redis, string $key, string $value = 'true') 
     {
         $time = microtime(true);
         $exit_time = $time + 10;
@@ -12,13 +16,13 @@ class RedisLock
 
         do 
         {
-            // Lock Redis with PX and NX
+            // Lock Redis with EX and NX
 
             $redis->multi();
-            $redis->set('lock:' . $key, $value, array('nx', 'ex' => 10));
+            $redis->set('lock:' . $key, $value, 'EX', 10, 'NX');
             $ret = $redis->exec();
 
-            if ($ret[0] == true) {
+            if ($ret[0] === true) {
                 return true;
             }
 
@@ -29,10 +33,10 @@ class RedisLock
         return false;
     }
 
-    static public function unlock($redis, $key) 
+    static public function unlock(Connection $redis, string $key) 
     {
         $redis->multi();
-        $redis->del("lock:" . $key);
+        $redis->del('lock:' . $key);
         $redis->exec();
     }
 }

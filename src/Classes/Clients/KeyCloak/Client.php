@@ -58,35 +58,31 @@ class Client
     {
         $cacheKey = 'kc_' . strtolower($realm) . '_openid_conf';
 
-        if (RedisLock::lock($this->redis, $cacheKey)) {
-            if($this->redis->exists($cacheKey)) {
-                $data = $this->redis->get($cacheKey);
-                RedisLock::unlock($this->redis, $cacheKey);
+        if($this->redis->exists($cacheKey)) {
+            $data = $this->redis->get($cacheKey);
 
-                if (!is_null($data)) {
-                    $this->openIdConfigurations[$realm] = json_decode($data, null, 512, JSON_OBJECT_AS_ARRAY | JSON_THROW_ON_ERROR);
-                    return true;
-                }
-                else {
-                    Log::error(__METHOD__ . ': Read from redis "' . $cacheKey . '" failed');
-
-                    $response = $this->makeHttpRequest('GET', $this->keyCloakHost . '/realms/' . $realm . '/.well-known/openid-configuration');
-
-                    if ($response->getStatusCode() === 200) {
-                        $this->openIdConfigurations[$realm] = json_decode((string) $response->getBody(), null, 512, JSON_OBJECT_AS_ARRAY | JSON_THROW_ON_ERROR);
-                        return true;
-                    }
-                }
+            if (!is_null($data)) {
+                $this->openIdConfigurations[$realm] = json_decode($data, null, 512, JSON_OBJECT_AS_ARRAY | JSON_THROW_ON_ERROR);
+                return true;
             }
             else {
+                Log::error(__METHOD__ . ': Read from redis "' . $cacheKey . '" failed');
+
                 $response = $this->makeHttpRequest('GET', $this->keyCloakHost . '/realms/' . $realm . '/.well-known/openid-configuration');
 
                 if ($response->getStatusCode() === 200) {
-                    $this->redis->set($cacheKey, (string) $response->getBody(), 'EX', 600);
-                    RedisLock::unlock($this->redis, $cacheKey);
                     $this->openIdConfigurations[$realm] = json_decode((string) $response->getBody(), null, 512, JSON_OBJECT_AS_ARRAY | JSON_THROW_ON_ERROR);
                     return true;
                 }
+            }
+        }
+        else {
+            $response = $this->makeHttpRequest('GET', $this->keyCloakHost . '/realms/' . $realm . '/.well-known/openid-configuration');
+
+            if ($response->getStatusCode() === 200) {
+                $this->redis->set($cacheKey, (string) $response->getBody(), 'EX', 600);
+                $this->openIdConfigurations[$realm] = json_decode((string) $response->getBody(), null, 512, JSON_OBJECT_AS_ARRAY | JSON_THROW_ON_ERROR);
+                return true;
             }
         }
 
@@ -116,39 +112,32 @@ class Client
         else {
             $cacheKey = 'kc_' . strtolower($realm) . '_cert';
 
-            if (RedisLock::lock($this->redis, $cacheKey)) {
-                if($this->redis->exists($cacheKey)) {
-                    RedisLock::unlock($this->redis, $cacheKey);
-                    $data = $this->redis->get($cacheKey);
-    
-                    if (!is_null($data)) {
-                        return new RequestResult(true, null, json_decode($data, null, 512, JSON_OBJECT_AS_ARRAY | JSON_THROW_ON_ERROR));
-                    }
-                    else {
-                        Log::error(__METHOD__ . ': Read from redis "' . $cacheKey . '" failed');
-    
-                        $response = $this->makeHttpRequest('GET', $this->openIdConfigurations[$realm]['jwks_uri'], []);
-    
-                        if ($response->getStatusCode() === 200) {
-                            return new RequestResult(false, $response, json_decode((string) $response->getBody(), null, 512, JSON_OBJECT_AS_ARRAY | JSON_THROW_ON_ERROR));
-                        }
-                    }
+            if($this->redis->exists($cacheKey)) {
+                $data = $this->redis->get($cacheKey);
+
+                if (!is_null($data)) {
+                    return new RequestResult(true, null, json_decode($data, null, 512, JSON_OBJECT_AS_ARRAY | JSON_THROW_ON_ERROR));
                 }
                 else {
+                    Log::error(__METHOD__ . ': Read from redis "' . $cacheKey . '" failed');
+
                     $response = $this->makeHttpRequest('GET', $this->openIdConfigurations[$realm]['jwks_uri'], []);
-    
+
                     if ($response->getStatusCode() === 200) {
-                        $this->redis->set($cacheKey, (string) $response->getBody(), 'EX', 3600);
-                        RedisLock::unlock($this->redis, $cacheKey);
                         return new RequestResult(false, $response, json_decode((string) $response->getBody(), null, 512, JSON_OBJECT_AS_ARRAY | JSON_THROW_ON_ERROR));
                     }
-                    else {
-                        RedisLock::unlock($this->redis, $cacheKey);
-                    }
                 }
-
-                return new RequestResult(false, $response, []);
             }
+            else {
+                $response = $this->makeHttpRequest('GET', $this->openIdConfigurations[$realm]['jwks_uri'], []);
+
+                if ($response->getStatusCode() === 200) {
+                    $this->redis->set($cacheKey, (string) $response->getBody(), 'EX', 3600);
+                    return new RequestResult(false, $response, json_decode((string) $response->getBody(), null, 512, JSON_OBJECT_AS_ARRAY | JSON_THROW_ON_ERROR));
+                }
+            }
+
+            return new RequestResult(false, $response, []);
         }
 
         return false;
@@ -480,15 +469,20 @@ class Client
     {
         $cacheKey = 'kc_' . strtolower($this->authRealm) . '_auth_token';
 
-        $jsonToken = $this->getJsonToken($cacheKey);
+        if (RedisLock::lock($this->redis, $cacheKey)) {
+            $jsonToken = $this->getJsonToken($cacheKey);
+        }
+        else {
+            return false;
+        }
+
+        RedisLock::unlock($this->redis, $cacheKey);
 
         if (!$jsonToken) {
-            RedisLock::unlock($this->redis, $cacheKey);
             return false;
         }
         else if ($jsonToken['token_type'] !== 'Bearer') {
             Log::error(__METHOD__ . ': Unsupported token type "' . $jsonToken['token_type']. '" (requested Bearer)');
-            RedisLock::unlock($this->redis, $cacheKey);
             return false;
         }
         else {
@@ -497,7 +491,7 @@ class Client
             $response = $this->makeHttpRequest($method, $requestUrl, $options);
 
             if ($response->getStatusCode() === 403) {
-                //if (RedisLock::lock($this->redis, $cacheKey)) {
+                if (RedisLock::lock($this->redis, $cacheKey)) {
                     if($this->redis->exists($cacheKey)) {
                         $this->redis->del($cacheKey);
                     }
@@ -520,10 +514,10 @@ class Client
                         RedisLock::unlock($this->redis, $cacheKey);
                         $response = $this->makeHttpRequestWithBearerToken($method, $requestUrl, $options);
                     }
-                //}
-            }
-            else {
-                RedisLock::unlock($this->redis, $cacheKey);
+                }
+                else {
+                    return false;
+                }
             }
 
             return $response;
@@ -532,44 +526,38 @@ class Client
 
     private function getJsonToken(string $cacheKey) : mixed
     {
-        if (RedisLock::lock($this->redis, $cacheKey)) {
-            if($this->redis->exists($cacheKey)) {
-                $data = $this->redis->get($cacheKey);
-    
-                if (!is_null($data)) {
-                    $jsonToken = json_decode($data, null, 512, JSON_OBJECT_AS_ARRAY | JSON_THROW_ON_ERROR);
-                }
-                else {
-                    Log::error(__METHOD__ . ': Read from redis "' . $cacheKey . '" failed');
-    
-                    $authResponse = $this->doClientAuth();
-    
-                    if ($authResponse !== false && $authResponse->rawResponse->getStatusCode() === 200) {
-                        $jsonToken = $authResponse->json;
-                    }
-                    else {
-                        return false;
-                    }
-                }
+        if($this->redis->exists($cacheKey)) {
+            $data = $this->redis->get($cacheKey);
+
+            if (!is_null($data)) {
+                $jsonToken = json_decode($data, null, 512, JSON_OBJECT_AS_ARRAY | JSON_THROW_ON_ERROR);
             }
-            else
-            {
+            else {
+                Log::error(__METHOD__ . ': Read from redis "' . $cacheKey . '" failed');
+
                 $authResponse = $this->doClientAuth();
-    
+
                 if ($authResponse !== false && $authResponse->rawResponse->getStatusCode() === 200) {
-                    $this->redis->set($cacheKey, json_encode($authResponse->json, JSON_FORCE_OBJECT | JSON_THROW_ON_ERROR), 'EX', $authResponse->json['expires_in']);
                     $jsonToken = $authResponse->json;
                 }
                 else {
                     return false;
                 }
             }
+        }
+        else
+        {
+            $authResponse = $this->doClientAuth();
 
-            return $jsonToken;
+            if ($authResponse !== false && $authResponse->rawResponse->getStatusCode() === 200) {
+                $this->redis->set($cacheKey, json_encode($authResponse->json, JSON_FORCE_OBJECT | JSON_THROW_ON_ERROR), 'EX', $authResponse->json['expires_in']);
+                $jsonToken = $authResponse->json;
+            }
+            else {
+                return false;
+            }
         }
-        else {
-            return false;
-        }
-        
+
+        return $jsonToken;
     }
 }
