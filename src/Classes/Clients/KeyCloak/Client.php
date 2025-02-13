@@ -59,8 +59,8 @@ class Client
     {
         $cacheKey = 'kc_' . strtolower($realm) . '_openid_conf';
 
-        if($this->redis->exists($cacheKey)) {
-            $data = $this->redis->get($cacheKey);
+        if($this->redis->executeRaw(['EXISTS', $cacheKey]) === 1) {
+            $data = $this->redis->executeRaw(['GET', $cacheKey]);
 
             if (!is_null($data)) {
                 $this->openIdConfigurations[$realm] = json_decode($data, null, 512, JSON_OBJECT_AS_ARRAY | JSON_THROW_ON_ERROR);
@@ -81,7 +81,7 @@ class Client
             $response = $this->makeHttpRequest('GET', $this->keyCloakHost . '/realms/' . $realm . '/.well-known/openid-configuration');
 
             if ($response->getStatusCode() === 200) {
-                $this->redis->set($cacheKey, (string) $response->getBody(), 'EX', 36000);
+                $this->redis->executeRaw(['SET', $cacheKey, (string) $response->getBody(), 'EX', 36000]);
                 $this->openIdConfigurations[$realm] = json_decode((string) $response->getBody(), null, 512, JSON_OBJECT_AS_ARRAY | JSON_THROW_ON_ERROR);
                 return true;
             }
@@ -113,8 +113,8 @@ class Client
         else {
             $cacheKey = 'kc_' . strtolower($realm) . '_cert';
 
-            if($this->redis->exists($cacheKey)) {
-                $data = $this->redis->get($cacheKey);
+            if($this->redis->executeRaw(['EXISTS', $cacheKey]) === 1) {
+                $data = $this->redis->executeRaw(['GET', $cacheKey]);
 
                 if (!is_null($data)) {
                     return new RequestResult(true, null, json_decode($data, null, 512, JSON_OBJECT_AS_ARRAY | JSON_THROW_ON_ERROR));
@@ -133,7 +133,7 @@ class Client
                 $response = $this->makeHttpRequest('GET', $this->openIdConfigurations[$realm]['jwks_uri'], []);
 
                 if ($response->getStatusCode() === 200) {
-                    $this->redis->set($cacheKey, (string) $response->getBody(), 'EX', 36000);
+                    $this->redis->executeRaw(['SET', $cacheKey, (string) $response->getBody(), 'EX', 36000]);
                     return new RequestResult(false, $response, json_decode((string) $response->getBody(), null, 512, JSON_OBJECT_AS_ARRAY | JSON_THROW_ON_ERROR));
                 }
             }
@@ -554,7 +554,7 @@ class Client
 
     private function getJsonToken(string $cacheKey) : mixed
     {
-        if($this->redis->exists($cacheKey)) {
+        if($this->redis->executeRaw(['EXISTS', $cacheKey]) === 1) {
             $data = $this->redis->executeRaw(['GET', $cacheKey]);
 
             if (!is_null($data)) {
