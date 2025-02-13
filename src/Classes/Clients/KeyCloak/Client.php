@@ -81,7 +81,7 @@ class Client
             $response = $this->makeHttpRequest('GET', $this->keyCloakHost . '/realms/' . $realm . '/.well-known/openid-configuration');
 
             if ($response->getStatusCode() === 200) {
-                $this->redis->set($cacheKey, (string) $response->getBody(), 'EX', 600);
+                $this->redis->set($cacheKey, (string) $response->getBody(), 'EX', 36000);
                 $this->openIdConfigurations[$realm] = json_decode((string) $response->getBody(), null, 512, JSON_OBJECT_AS_ARRAY | JSON_THROW_ON_ERROR);
                 return true;
             }
@@ -133,7 +133,7 @@ class Client
                 $response = $this->makeHttpRequest('GET', $this->openIdConfigurations[$realm]['jwks_uri'], []);
 
                 if ($response->getStatusCode() === 200) {
-                    $this->redis->set($cacheKey, (string) $response->getBody(), 'EX', 3600);
+                    $this->redis->set($cacheKey, (string) $response->getBody(), 'EX', 36000);
                     return new RequestResult(false, $response, json_decode((string) $response->getBody(), null, 512, JSON_OBJECT_AS_ARRAY | JSON_THROW_ON_ERROR));
                 }
             }
@@ -469,55 +469,82 @@ class Client
     public function makeHttpRequestWithBearerToken(string $method, string $requestUrl, array $options = []) : mixed
     {
         $cacheKey = 'kc_' . strtolower($this->authRealm) . '_auth_token';
+        $lockCacheKeyToken = $cacheKey . '_getJsonToken';
 
-        if (RedisLock::lock($this->redis, $cacheKey)) {
+        if (RedisLock::lock($this->redis, $lockCacheKeyToken)) {
             $jsonToken = $this->getJsonToken($cacheKey);
         }
         else {
             return false;
         }
 
-        RedisLock::unlock($this->redis, $cacheKey);
-
         if (!$jsonToken) {
+            RedisLock::unlock($this->redis, $lockCacheKeyToken);
             return false;
         }
         else if ($jsonToken['token_type'] !== 'Bearer') {
             Log::error(__METHOD__ . ': Unsupported token type "' . $jsonToken['token_type']. '" (requested Bearer)');
+
+            RedisLock::unlock($this->redis, $lockCacheKeyToken);
             return false;
         }
         else {
+            list($headersB64, $payloadB64, $sig) = explode('.', $jsonToken['access_token']);
+            $decoded = json_decode(base64_decode($payloadB64), true);
+
+            $rTime = $decoded['exp'] - time();
+
+            if ($rTime <= 0) { //Scaduto
+                if($this->redis->executeRaw(['EXISTS', $cacheKey]) === 1) {
+                    $this->redis->executeRaw(['DEL', $cacheKey]);
+                }
+
+                if (array_key_exists('refresh_token', $jsonToken)) {
+                    $jsonToken = $this->getRefreshToken($cacheKey, $jsonToken);
+
+                    if (!$jsonToken) {
+                        RedisLock::unlock($this->redis, $lockCacheKeyToken);
+                        return $this->makeHttpRequestWithBearerToken($method, $requestUrl, $options);
+                    }
+                    else {
+                        RedisLock::unlock($this->redis, $lockCacheKeyToken);
+                        $tokenIsLocked = false;
+                    }
+                }
+                else {
+                    RedisLock::unlock($this->redis, $lockCacheKeyToken);
+                    return $this->makeHttpRequestWithBearerToken($method, $requestUrl, $options);
+                }
+            }
+            else if ($rTime >= 30) {
+                RedisLock::unlock($this->redis, $lockCacheKeyToken);
+                $tokenIsLocked = false;
+            }
+            else {
+                $tokenIsLocked = true;
+            }
+
             $options['headers']['AUTHORIZATION'] = 'Bearer:' . $jsonToken['access_token'];
 
             $response = $this->makeHttpRequest($method, $requestUrl, $options);
 
             if ($response->getStatusCode() === 403) {
-                if (RedisLock::lock($this->redis, $cacheKey)) {
-                    if($this->redis->exists($cacheKey)) {
-                        $this->redis->del($cacheKey);
-                    }
-
-                    if (array_key_exists('refresh_token', $jsonToken)) {
-                        $authResponse = $this->doTokenRefresh($jsonToken);
-
-                        if ($authResponse !== false && $authResponse->rawResponse->getStatusCode() === 200) {
-                            $this->redis->set($cacheKey, json_encode($authResponse->json, JSON_FORCE_OBJECT | JSON_THROW_ON_ERROR), 'EX', $authResponse->json['expires_in']);
-                            RedisLock::unlock($this->redis, $cacheKey);
-
-                            $response = $this->makeHttpRequestWithBearerToken($method, $requestUrl, $options);
-                        }
-                        else {
-                            RedisLock::unlock($this->redis, $cacheKey);
-                            return false;
-                        }
-                    }
-                    else {
-                        RedisLock::unlock($this->redis, $cacheKey);
-                        $response = $this->makeHttpRequestWithBearerToken($method, $requestUrl, $options);
+                if ($tokenIsLocked) {
+                    if($this->redis->executeRaw(['EXISTS', $cacheKey]) === 1) {
+                        $this->redis->executeRaw(['DEL', $cacheKey]);
                     }
                 }
-                else {
-                    return false;
+
+                if (array_key_exists('refresh_token', $jsonToken)) {
+                    $this->getRefreshToken($cacheKey, $jsonToken);
+                }
+
+                RedisLock::unlock($this->redis, $lockCacheKeyToken);
+                return $this->makeHttpRequestWithBearerToken($method, $requestUrl, $options);
+            }
+            else {
+                if ($tokenIsLocked) {
+                    RedisLock::unlock($this->redis, $lockCacheKeyToken);
                 }
             }
 
@@ -528,7 +555,7 @@ class Client
     private function getJsonToken(string $cacheKey) : mixed
     {
         if($this->redis->exists($cacheKey)) {
-            $data = $this->redis->get($cacheKey);
+            $data = $this->redis->executeRaw(['GET', $cacheKey]);
 
             if (!is_null($data)) {
                 $jsonToken = json_decode($data, null, 512, JSON_OBJECT_AS_ARRAY | JSON_THROW_ON_ERROR);
@@ -551,7 +578,7 @@ class Client
             $authResponse = $this->doClientAuth();
 
             if ($authResponse !== false && $authResponse->rawResponse->getStatusCode() === 200) {
-                $this->redis->set($cacheKey, json_encode($authResponse->json, JSON_FORCE_OBJECT | JSON_THROW_ON_ERROR), 'EX', $authResponse->json['expires_in']);
+                $this->redis->executeRaw(['SET', $cacheKey, json_encode($authResponse->json, JSON_FORCE_OBJECT | JSON_THROW_ON_ERROR), 'EX', $authResponse->json['expires_in']]);
                 $jsonToken = $authResponse->json;
             }
             else {
@@ -560,5 +587,18 @@ class Client
         }
 
         return $jsonToken;
+    }
+
+    private function getRefreshToken(string $cacheKey, mixed $oldJsonToken) : mixed
+    {
+        $authResponse = $this->doTokenRefresh($oldJsonToken);
+
+        if ($authResponse !== false && $authResponse->rawResponse->getStatusCode() === 200) {
+            $this->redis->executeRaw(['SET', $cacheKey, json_encode($authResponse->json, JSON_FORCE_OBJECT | JSON_THROW_ON_ERROR), 'EX', $authResponse->json['expires_in']]);
+            return $authResponse->json;
+        }
+        else {
+            return false;
+        }
     }
 }

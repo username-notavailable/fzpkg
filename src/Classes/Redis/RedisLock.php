@@ -18,11 +18,9 @@ class RedisLock
         {
             // Lock Redis with EX and NX
 
-            $redis->multi();
-            $redis->set('lock:' . $key, $value, 'EX', 10, 'NX');
-            $ret = $redis->exec();
+            $ret = $redis->executeRaw(['SET', 'lock:' . $key, $value, 'NX', 'EX', 10]);
 
-            if ($ret[0] === true) {
+            if ($ret === 'OK') {
                 return true;
             }
 
@@ -35,8 +33,6 @@ class RedisLock
 
     static public function unlock(Connection $redis, string $key) 
     {
-        $redis->multi();
-        $redis->del('lock:' . $key);
-        $redis->exec();
+        $redis->executeRaw(['DEL', 'lock:' . $key]);
     }
 }
