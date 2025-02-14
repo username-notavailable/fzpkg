@@ -39,7 +39,7 @@ final class RunSweetApiCommand extends StartCommand
                 $this->fail('SweetAPI "' . $this->argument('apiName') . '" not exists (directory "' . $apiDirectoryPath . '" not found)');
             }
             else {
-                $this->createRoutesFile($apiDirectoryPath, Utils::makeFilePath($apiDirectoryPath, 'routes', 'api.php'));
+                self::createRoutesFile($apiDirectoryPath, Utils::makeFilePath($apiDirectoryPath, 'routes', 'api.php'), $this->option('disable-swagger'));
             }
 
             app()->setBasePath($apiDirectoryPath);
@@ -53,13 +53,13 @@ final class RunSweetApiCommand extends StartCommand
             $apiName = RUN_ARTISAN_FROM_SWEET_API_DIR;
             $apiDirectoryPath = base_path();
 
-            $this->createRoutesFile($apiDirectoryPath, Utils::makeFilePath($apiDirectoryPath, 'routes', 'api.php'));
+            self::createRoutesFile($apiDirectoryPath, Utils::makeFilePath($apiDirectoryPath, 'routes', 'api.php'), $this->option('disable-swagger'));
         }
 
         parent::handle();
     }
 
-    protected function createRoutesFile(string $apiDirectoryPath, string $apiRoutesFilename) 
+    public static function createRoutesFile(string $apiDirectoryPath, string $apiRoutesFilename, bool $disableSwagger) 
     {
         $classes = glob(Utils::makeFilePath($apiDirectoryPath, 'app', 'Http', 'Endpoints', '?*Endpoints.php'));
 
@@ -76,7 +76,7 @@ final class RunSweetApiCommand extends StartCommand
             foreach ($classes as $idx => $class) {
                 $className = basename($class, '.php');
 
-                if ($className === 'SwaggerEndpoints' && $this->option('disable-swagger')) {
+                if ($className === 'SwaggerEndpoints' && $disableSwagger) {
                     continue;
                 }
 
