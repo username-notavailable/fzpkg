@@ -29,7 +29,7 @@ class SwaggerEndpoints extends Endpoints
         $jsonFilePath = base_path(env('SWAGGER_FILE_PATH', 'sweetapi/swagger.json'));
     
         if (!file_exists($jsonFilePath) || (env('APP_ENV') === 'local' && env('SWAGGER_REPLACE_FILE'))) {
-            $this->generateSwaggerJson(parse_url(url()->current()), $jsonFilePath);
+            self::generateSwaggerJson(parse_url(url()->current()), $jsonFilePath);
         }
 
         return response(file_get_contents($jsonFilePath), 200)->header('Content-Type', 'application/json');
