@@ -495,10 +495,20 @@ class Client
             $rTime = $decoded['exp'] - time();
 
             if ($rTime <= 0) { //Scaduto
-                if($this->redis->executeRaw(['EXISTS', $cacheKey]) === 1) {
-                    $this->redis->executeRaw(['DEL', $cacheKey]);
-                }
+                do
+                {
+                    $done = true;
 
+                    if($this->redis->executeRaw(['EXISTS', $cacheKey]) === 1) {
+                        $done = $this->redis->executeRaw(['DEL', $cacheKey]) === 1;
+                    }
+
+                    if (!$done) {
+                        usleep(100000);
+                    }
+
+                } while (!$done);
+                
                 if (array_key_exists('refresh_token', $jsonToken)) {
                     $jsonToken = $this->getRefreshToken($cacheKey, $jsonToken);
 
@@ -516,7 +526,7 @@ class Client
                     return $this->makeHttpRequestWithBearerToken($method, $requestUrl, $options);
                 }
             }
-            else if ($rTime >= 30) {
+            else if ($rTime >= 15) {
                 RedisLock::unlock($this->redis, $lockCacheKeyToken);
                 $tokenIsLocked = false;
             }
@@ -530,16 +540,52 @@ class Client
 
             if ($response->getStatusCode() === 403) {
                 if ($tokenIsLocked) {
-                    if($this->redis->executeRaw(['EXISTS', $cacheKey]) === 1) {
-                        $this->redis->executeRaw(['DEL', $cacheKey]);
-                    }
+                    do
+                    {
+                        $done = true;
+
+                        if($this->redis->executeRaw(['EXISTS', $cacheKey]) === 1) {
+                            $done = $this->redis->executeRaw(['DEL', $cacheKey]) === 1;
+                        }
+
+                        if (!$done) {
+                            usleep(100000);
+                        }
+
+                    } while (!$done);
                 }
 
                 if (array_key_exists('refresh_token', $jsonToken)) {
-                    $this->getRefreshToken($cacheKey, $jsonToken);
+                    if ($tokenIsLocked) {
+                        $this->getRefreshToken($cacheKey, $jsonToken);
+
+                        RedisLock::unlock($this->redis, $lockCacheKeyToken);
+                        //return $this->makeHttpRequestWithBearerToken($method, $requestUrl, $options);
+                    }
+                    else {
+                        $lockCacheKeyRefresh = $cacheKey . '_getRefreshToken';
+
+                        if (RedisLock::lock($this->redis, $lockCacheKeyRefresh)) {
+                            if ($this->getRefreshToken($cacheKey, $jsonToken) !== false) {
+                                RedisLock::unlock($this->redis, $lockCacheKeyToken);
+                                //return $this->makeHttpRequestWithBearerToken($method, $requestUrl, $options);
+                            }
+                            else {
+                                RedisLock::unlock($this->redis, $lockCacheKeyRefresh);
+                                //return $this->makeHttpRequestWithBearerToken($method, $requestUrl, $options);
+                            }
+                        }
+                        /*else {
+                            return $this->makeHttpRequestWithBearerToken($method, $requestUrl, $options);
+                        }*/
+                    }
+                }
+                else {
+                    if ($tokenIsLocked) {
+                        RedisLock::unlock($this->redis, $lockCacheKeyToken);
+                    }
                 }
 
-                RedisLock::unlock($this->redis, $lockCacheKeyToken);
                 return $this->makeHttpRequestWithBearerToken($method, $requestUrl, $options);
             }
             else {
@@ -558,35 +604,32 @@ class Client
             $data = $this->redis->executeRaw(['GET', $cacheKey]);
 
             if (!is_null($data)) {
-                $jsonToken = json_decode($data, null, 512, JSON_OBJECT_AS_ARRAY | JSON_THROW_ON_ERROR);
+                return json_decode($data, null, 512, JSON_OBJECT_AS_ARRAY | JSON_THROW_ON_ERROR);
             }
             else {
-                Log::error(__METHOD__ . ': Read from redis "' . $cacheKey . '" failed');
+                Log::error(__METHOD__ . ': Read "' . $cacheKey . '" from redis failed');
+            }
+        }
 
-                $authResponse = $this->doClientAuth();
+        $authResponse = $this->doClientAuth();
 
-                if ($authResponse !== false && $authResponse->rawResponse->getStatusCode() === 200) {
-                    $jsonToken = $authResponse->json;
+        if ($authResponse !== false && $authResponse->rawResponse->getStatusCode() === 200) {
+            do
+            {
+                $result = $this->redis->executeRaw(['SET', $cacheKey, json_encode($authResponse->json, JSON_FORCE_OBJECT | JSON_THROW_ON_ERROR), 'EX', $authResponse->json['expires_in']]);
+
+                if ($result === 'OK') {
+                    return $authResponse->json;
                 }
                 else {
-                    return false;
+                    usleep(100000);
                 }
-            }
-        }
-        else
-        {
-            $authResponse = $this->doClientAuth();
 
-            if ($authResponse !== false && $authResponse->rawResponse->getStatusCode() === 200) {
-                $this->redis->executeRaw(['SET', $cacheKey, json_encode($authResponse->json, JSON_FORCE_OBJECT | JSON_THROW_ON_ERROR), 'EX', $authResponse->json['expires_in']]);
-                $jsonToken = $authResponse->json;
-            }
-            else {
-                return false;
-            }
+            } while ($result !== 'OK');
         }
-
-        return $jsonToken;
+        else {
+            return false;
+        }
     }
 
     private function getRefreshToken(string $cacheKey, mixed $oldJsonToken) : mixed
@@ -594,8 +637,18 @@ class Client
         $authResponse = $this->doTokenRefresh($oldJsonToken);
 
         if ($authResponse !== false && $authResponse->rawResponse->getStatusCode() === 200) {
-            $this->redis->executeRaw(['SET', $cacheKey, json_encode($authResponse->json, JSON_FORCE_OBJECT | JSON_THROW_ON_ERROR), 'EX', $authResponse->json['expires_in']]);
-            return $authResponse->json;
+            do
+            {
+                $result = $this->redis->executeRaw(['SET', $cacheKey, json_encode($authResponse->json, JSON_FORCE_OBJECT | JSON_THROW_ON_ERROR), 'EX', $authResponse->json['expires_in']]);
+
+                if ($result === 'OK') {
+                    return $authResponse->json;
+                }
+                else {
+                    usleep(100000);
+                }
+
+            } while ($result !== 'OK');
         }
         else {
             return false;
