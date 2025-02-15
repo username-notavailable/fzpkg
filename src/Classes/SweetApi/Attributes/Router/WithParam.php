@@ -11,7 +11,7 @@ class WithParam
 {
     public function __construct(public string $name = '', public string $in = '', public string $description = '', public bool $required = false, public bool $deprecated = false, public bool $allowEmptyValue = false, public string $example = '')
     {
-        if (!in_array(strtolower($in), ['query', 'header', 'path', 'cookie'])) {
+        if (!in_array(strtolower($in), ['query', 'header', 'path', 'cookie', 'body'])) {
             throw new InvalidArgumentException('Invalid in value "' . $in . '"');
         }
     }
