@@ -144,7 +144,7 @@ class Client
         return false;
     }
 
-    protected function doClientAuth() : mixed
+    public function doClientAuth() : mixed
     {
         switch ($this->authType) {
             case 'ClientSecret':
