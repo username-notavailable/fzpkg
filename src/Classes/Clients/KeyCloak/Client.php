@@ -144,7 +144,7 @@ class Client
         return false;
     }
 
-    public function doClientAuth() : mixed
+    protected function doClientAuth() : mixed
     {
         switch ($this->authType) {
             case 'ClientSecret':
@@ -158,6 +158,22 @@ class Client
 
             default:
                 throw new \Exception('Unsupported authType "' . $this->authType . '"');
+        }
+    }
+
+    public function getToken() : mixed
+    {
+        $cacheKey = 'kc_' . strtolower($this->authRealm) . '_auth_token';
+        $lockCacheKeyToken = $cacheKey . '_getJsonToken';
+
+        if (RedisLock::lock($this->redis, $lockCacheKeyToken)) {
+            $jsonToken = $this->getJsonToken($cacheKey);
+
+            RedisLock::unlock($this->redis, $lockCacheKeyToken);
+            return $jsonToken;
+        }
+        else {
+            return false;
         }
     }
 
