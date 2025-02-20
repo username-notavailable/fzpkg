@@ -9,7 +9,7 @@ use InvalidArgumentException;
 #[\Attribute(\Attribute::TARGET_METHOD)]
 class Route 
 {
-    public function __construct(public string $path = '', public string $verbs = '*', public string $name = '', public array $where = [], public array $whereNumber = [], public array $whereAlpha = [], public array $whereAlphaNumeric = [], public array $whereUuid = [], public array $whereUlid = [], public array $whereIn = [], public bool $withTrashed = false, public ?bool $scopeBindings = null, public array $consumes = [], public string $summary = '', public string $description = '', public bool $deprecated = false)
+    public function __construct(public string $path = '', public string $verbs = '*', public string $name = '', public array $where = [], public array $whereNumber = [], public array $whereAlpha = [], public array $whereAlphaNumeric = [], public array $whereUuid = [], public array $whereUlid = [], public array $whereIn = [], public bool $withTrashed = false, public ?bool $scopeBindings = null, public array $schemaParams = [])
     {
         $verbs = explode('|', $this->verbs);
 
