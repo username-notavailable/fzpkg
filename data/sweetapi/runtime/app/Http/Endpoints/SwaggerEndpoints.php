@@ -158,7 +158,6 @@ class SwaggerEndpoints extends Endpoints
 
                 $info = [
                     'title' => env('SWEETAPI_TITLE', 'SweetAPI'),
-                    'summary' => env('SWEETAPI_SUMMARY', ''),
                     'description' => env('SWEETAPI_DESCRIPTION', ''),
                     'termsOfService' => env('SWEETAPI_TERMS_OF_SERVICE', ''),
                     'contact' => [
@@ -168,7 +167,6 @@ class SwaggerEndpoints extends Endpoints
                     ],
                     'license' => [
                         'name' => env('SWEETAPI_LICENSE_NAME', ''),
-                        'identifier' => env('SWEETAPI_LICENSE_SPDX', ''),
                         'url' => env('SWEETAPI_LICENSE_URL', '')
                     ],
                     'version' => env('SWEETAPI_OPEN_API_DOC_VERSION', '1.0.0'),
@@ -227,7 +225,7 @@ class SwaggerEndpoints extends Endpoints
 
                         array_unshift($methodData['routeTags'], $controllerData['controller']);
 
-                        $produces = [];
+                        /*$produces = [];
 
                         foreach ($methodData['routeResponses'] as $data) {
                             $produces[strtolower($data->content)] = true;
@@ -235,7 +233,7 @@ class SwaggerEndpoints extends Endpoints
 
                         if (empty($produces)) {
                             $produces['string'] = true;
-                        }
+                        }*/
 
                         $pathItemData = [];
 
@@ -254,7 +252,7 @@ class SwaggerEndpoints extends Endpoints
                             $pData = array_merge($methodData['routeSchemaParams'], [
                                 'tags' => $methodData['routeTags'],
                                 'operationId' => $methodData['routeName'] . '_###_' . $verb,
-                                'produces' => array_keys($produces),
+                                //'produces' => array_keys($produces),
                                 'responses' => $methodData['routeResponses'],
                                 'x-endpoints' => $controllerData['controller'] . '::' . $methodData['methodName']
                             ]);

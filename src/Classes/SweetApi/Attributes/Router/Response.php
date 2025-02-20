@@ -9,9 +9,9 @@ class Response
 {
     public function __construct(public int $statusCode = 200, public array $schemaParams = [])
     {
-        if (!array_key_exists('content', $this->schemaParams)) {
+        /*if (!array_key_exists('content', $this->schemaParams)) {
             $this->schemaParams['content'] = 'string';
-        }
+        }*/
 
         if (!array_key_exists('description', $this->schemaParams)) {
             $this->schemaParams['description'] = 'HTTP Response';
