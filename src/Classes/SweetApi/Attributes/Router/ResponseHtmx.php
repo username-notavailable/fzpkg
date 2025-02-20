@@ -9,7 +9,7 @@ class ResponseHtmx extends Response
 {
     public function __construct(int $statusCode = 200, array $schemaParams = [])
     {
-        //$schemaParams['content'] = 'text/html';
+        $schemaParams['content'] = 'text/html';
 
         parent::__construct($statusCode, $schemaParams);
     }

@@ -9,7 +9,7 @@ class ResponseJson extends Response
 {
     public function __construct(int $statusCode = 200, array $schemaParams = [])
     {
-        //$schemaParams['content'] = 'application/json';
+        $schemaParams['content'] = 'application/json';
 
         parent::__construct($statusCode, $schemaParams);
     }
