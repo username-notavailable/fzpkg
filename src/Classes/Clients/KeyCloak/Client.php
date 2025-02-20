@@ -550,7 +550,7 @@ class Client
                 $tokenIsLocked = true;
             }
 
-            $options['headers']['AUTHORIZATION'] = 'Bearer:' . $jsonToken['access_token'];
+            $options['headers']['AUTHORIZATION'] = 'Bearer ' . $jsonToken['access_token'];
 
             $response = $this->makeHttpRequest($method, $requestUrl, $options);
 
