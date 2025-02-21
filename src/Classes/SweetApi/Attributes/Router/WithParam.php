@@ -20,5 +20,13 @@ class WithParam
         if (!in_array($this->schemaParams['in'], ['query', 'header', 'path', 'cookie'])) {
             throw new InvalidArgumentException(__METHOD__ . ': Invalid "in" value (' . $this->schemaParams['in'] . ')');
         }
+
+        if (!array_key_exists('schema', $this->schemaParams) && !array_key_exists('content', $this->schemaParams)) {
+            throw new InvalidArgumentException(__METHOD__ . ': "' . $this->schemaParams['name'] . '" must contain "schema" or "content"');
+        }
+
+        if (array_key_exists('schema', $this->schemaParams) && array_key_exists('content', $this->schemaParams)) {
+            throw new InvalidArgumentException(__METHOD__ . ': "' . $this->schemaParams['name'] . '" can\'t contain "schema" and "content"');
+        }
     }
 }
