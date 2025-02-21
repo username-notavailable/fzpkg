@@ -6,10 +6,10 @@ namespace Fuzzy\Fzpkg\Classes\SweetApi\Attributes\Router;
 
 use InvalidArgumentException;
 
-#[\Attribute(\Attribute::TARGET_METHOD | \Attribute::IS_REPEATABLE)]
+#[\Attribute(\Attribute::TARGET_CLASS | \Attribute::IS_REPEATABLE)]
 class WithParam 
 {
-    public function __construct(public array $schemaParams = [])
+    public function __construct(public string $name, public array $schemaParams)
     {
         foreach (['name', 'in'] as $paramName) {
             if (!array_key_exists($paramName, $this->schemaParams)) {

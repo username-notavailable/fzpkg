@@ -7,7 +7,7 @@ namespace Fuzzy\Fzpkg\Classes\SweetApi\Attributes\Router;
 use InvalidArgumentException;
 
 #[\Attribute(\Attribute::TARGET_CLASS | \Attribute::IS_REPEATABLE)]
-class Tag 
+class WithTag 
 {
     public function __construct(public array $schemaParams = [])
     {

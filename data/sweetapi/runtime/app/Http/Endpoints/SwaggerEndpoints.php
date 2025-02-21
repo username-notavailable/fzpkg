@@ -3,8 +3,29 @@
 namespace App\Http\Endpoints;
 
 use Fuzzy\Fzpkg\Classes\Utils\Utils;
-use Fuzzy\Fzpkg\Classes\SweetApi\Attributes\Router\{RoutePrefix, Get, Route, Response, Tag, RouteTag, WithParam, WithBody, Schema};
-use cebe\openapi\Writer;
+use Fuzzy\Fzpkg\Classes\SweetApi\Attributes\Router\{
+    RoutePrefix, 
+    WithTag,
+    WithServer,
+    WithResponse,
+    WithHeader,
+    WithSchema,
+    WithParam,
+    WithExample,
+    WithRequestBody,
+    WithLink,
+    WithCallback,
+    WithSecurityScheme,
+    WithSecurityRequirement,
+    Get, 
+    Route, 
+    RouteResponse, 
+    RouteTag, 
+    RouteParam, 
+    RouteRequestBody, 
+    RouteSchema
+};
+
 use cebe\openapi\spec\OpenApi; 
 use cebe\openapi\spec\PathItem as OpenApiPathItem;
 use cebe\openapi\spec\Tag as OpenApiTag;
@@ -14,6 +35,12 @@ use cebe\openapi\spec\Response as OpenApiResponse;
 use cebe\openapi\spec\Operation as OpenApiOperation;
 use cebe\openapi\spec\SecurityScheme as OpenApiSecurityScheme;
 use cebe\openapi\spec\SecurityRequirement as OpenApiSecurityRequirement;
+use cebe\openapi\spec\RequestBody as OpenApiRequestBody;
+use cebe\openapi\spec\Server as OpenApiServer;
+use cebe\openapi\spec\Example as OpenApiExample;
+use cebe\openapi\spec\Link as OpenApiLink;
+use cebe\openapi\spec\Callback as OpenApiCallback;
+use cebe\openapi\Writer;
 use Fuzzy\Fzpkg\Classes\Clients\KeyCloak\Client;
 use App\Http\Classes\{ApiResponse, ApiErrorResponse};
 
@@ -67,9 +94,23 @@ class SwaggerEndpoints extends Endpoints
                 $schemes[] = 'https';
             }
 
-            $classes = glob(__DIR__ . DIRECTORY_SEPARATOR . '?*Endpoints.php');
-            $definitions = [];
+            $components = [
+                'schemas' => [],
+                'responses' => [],
+                'parameters' => [],
+                'examples' => [],
+                'requestBodies' => [],
+                'headers' => [],
+                'securitySchemes' => [],
+                'links' => [],
+                'callbacks' => []
+            ];
 
+            $servers = [];
+            $security = [];
+
+            $classes = glob(__DIR__ . DIRECTORY_SEPARATOR . '?*Endpoints.php');
+            
             if (count($classes) > 0) {
                 $endpointsStruct = [];
                 
@@ -97,12 +138,51 @@ class SwaggerEndpoints extends Endpoints
                             $endpointsStruct[$idx]['prefix'] = $attributeInstance->path;
                         }
 
-                        if ($attributeInstance instanceof Tag) {
+                        if ($attributeInstance instanceof WithTag) {
                             $endpointsStruct[$idx]['tag'][] = new OpenApiTag($attributeInstance->schemaParams);
                         }
 
-                        if ($attributeInstance instanceof Schema) {
-                            $definitions[$attributeInstance->name] = new OpenApiSchema($attributeInstance->schemaParams);
+                        if ($attributeInstance instanceof WithServer) {
+                            $servers[] = new OpenApiServer($attributeInstance->schemaParams);
+                        }
+
+                        if ($attributeInstance instanceof WithSecurityRequirement) {
+                            $security[] = new OpenApiSecurityRequirement($attributeInstance->schemaParams);
+                        }
+
+                        if ($attributeInstance instanceof WithHeader) {
+                            $components['headers'][$attributeInstance->name] = new OpenApiParameter($attributeInstance->schemaParams);
+                        }
+                        else if ($attributeInstance instanceof WithParam) {
+                            $components['parameters'][$attributeInstance->name] = new OpenApiParameter($attributeInstance->schemaParams);
+                        }
+
+                        if ($attributeInstance instanceof WithResponse) {
+                            $components['responses'][$attributeInstance->name] = new OpenApiResponse($attributeInstance->schemaParams);
+                        }
+
+                        if ($attributeInstance instanceof WithExample) {
+                            $components['examples'][$attributeInstance->name] = new OpenApiExample($attributeInstance->schemaParams);
+                        }
+
+                        if ($attributeInstance instanceof WithRequestBody) {
+                            $components['requestBodies'][$attributeInstance->name] = new OpenApiRequestBody($attributeInstance->schemaParams);
+                        }
+
+                        if ($attributeInstance instanceof WithLink) {
+                            $components['links'][$attributeInstance->name] = new OpenApiLink($attributeInstance->schemaParams);
+                        }
+
+                        if ($attributeInstance instanceof WithCallback) {
+                            $components['callbacks'][$attributeInstance->name] = new OpenApiCallback($attributeInstance->schemaParams);
+                        }
+
+                        if ($attributeInstance instanceof WithSchema) {
+                            $components['schemas'][$attributeInstance->name] = new OpenApiSchema($attributeInstance->schemaParams);
+                        }
+
+                        if ($attributeInstance instanceof WithSecurityScheme) {
+                            $components['securitySchemes'][$attributeInstance->name] = new OpenApiSecurityScheme($attributeInstance->schemaParams);
                         }
                     }
 
@@ -115,6 +195,7 @@ class SwaggerEndpoints extends Endpoints
                         $routeTags = [];
                         $routeParams = [];
                         $routeSchemaParams = [];
+                        $routeRequestBody = null;
 
                         foreach ($method->getAttributes() as $attribute) {
                             $attributeInstance = $attribute->newInstance();
@@ -133,7 +214,7 @@ class SwaggerEndpoints extends Endpoints
                                 }
                             }
 
-                            if ($attributeInstance instanceof Response) {
+                            if ($attributeInstance instanceof RouteResponse) {
                                 $routeResponses[$attributeInstance->statusCode] = new OpenApiResponse($attributeInstance->schemaParams);
                             }
 
@@ -141,17 +222,21 @@ class SwaggerEndpoints extends Endpoints
                                 $routeTags[] = $attributeInstance->name;
                             }
 
-                            if ($attributeInstance instanceof WithParam) {
+                            if ($attributeInstance instanceof RouteParam) {
                                 $routeParams[] = new OpenApiParameter($attributeInstance->schemaParams);
                             }
 
-                            if ($attributeInstance instanceof Schema) {
-                                $components[$attributeInstance->name] = new OpenApiSchema($attributeInstance->schemaParams);
+                            if ($attributeInstance instanceof RouteSchema) {
+                                $components['schemas'][$attributeInstance->name] = new OpenApiSchema($attributeInstance->schemaParams);
+                            }
+
+                            if ($attributeInstance instanceof RouteRequestBody) {
+                                $routeRequestBody = new OpenApiRequestBody($attributeInstance->schemaParams);
                             }
                         }
 
                         if (!is_null($routeVerbs)) {
-                            $endpointsStruct[$idx]['methods'][] = ['methodName' => $methodName, 'routeVerbs' => $routeVerbs, 'routePath' => $routePath, 'routeName' => $routeName, 'routeResponses' => $routeResponses, 'routeTags' => $routeTags, 'routeParams' => $routeParams, 'routeSchemaParams' => $routeSchemaParams];
+                            $endpointsStruct[$idx]['methods'][] = ['methodName' => $methodName, 'routeVerbs' => $routeVerbs, 'routePath' => $routePath, 'routeName' => $routeName, 'routeResponses' => $routeResponses, 'routeTags' => $routeTags, 'routeParams' => $routeParams, 'routeSchemaParams' => $routeSchemaParams, 'routeRequestBody' => $routeRequestBody];
                         }
                     }
                 }
@@ -172,31 +257,22 @@ class SwaggerEndpoints extends Endpoints
                     'version' => env('SWEETAPI_OPEN_API_DOC_VERSION', '1.0.0'),
                 ];
 
+                if (empty($servers)) {
+                    $servers[] = new OpenApiServer(['url' => $urlParts['host'] . ($urlParts['port'] === 80 ? '' : ':' . $urlParts['port'])]);
+                }
+
                 $openapi = [
-                    'swagger' => '2.0',
-                    //'openapi' => '3.0.2',
+                    'openapi' => '3.0.2',
                     'info' => $info,
-                    'host' => $urlParts['host'] . ($urlParts['port'] === 80 ? '' : ':' . $urlParts['port']),
-                    'basePath' => '/',
-                    'securityDefinitions' => [
-                        'Bearer' => new OpenApiSecurityScheme([
-                            'type' => 'apiKey',
-                            'description' => 'Realm bearer token',
-                            'name' => 'Authorization',
-                            'in' => 'header'
-                        ])
-                    ],
-                    'security' => [
-                        new OpenApiSecurityRequirement(['Bearer' => []])
-                    ],
-                    'tags' => [],
-                    'schemes' => $schemes,
+                    'servers' => $servers,
                     'paths' => [],
+                    'components' => $components,
+                    'security' => $security,
+                    'tags' => [],
                     'externalDocs' => [
                         'url' => env('SWEETAPI_EXT_DOC_URL', ''),
                         'description' => env('SWEETAPI_EXT_DESCRIPTION', '')
                     ],
-                    'definitions' => $definitions,
                     'x-routes' => []
                 ];
 
@@ -217,23 +293,13 @@ class SwaggerEndpoints extends Endpoints
                         $pathName .= trim($methodData['routePath'], ' ');
                         
                         if (is_string($methodData['routeVerbs'])) {
-                            $verbs = ['get', 'post', 'put', 'patch', 'options', 'delete'];
+                            $verbs = ['get', 'post', 'put', 'patch', 'options', 'delete', 'head', 'trace'];
                         }
                         else {
                             $verbs = $methodData['routeVerbs'];
                         }
 
                         array_unshift($methodData['routeTags'], $controllerData['controller']);
-
-                        /*$produces = [];
-
-                        foreach ($methodData['routeResponses'] as $data) {
-                            $produces[strtolower($data->content)] = true;
-                        }
-
-                        if (empty($produces)) {
-                            $produces['string'] = true;
-                        }*/
 
                         $pathItemData = [];
 
@@ -252,13 +318,16 @@ class SwaggerEndpoints extends Endpoints
                             $pData = array_merge($methodData['routeSchemaParams'], [
                                 'tags' => $methodData['routeTags'],
                                 'operationId' => $methodData['routeName'] . '_###_' . $verb,
-                                //'produces' => array_keys($produces),
                                 'responses' => $methodData['routeResponses'],
                                 'x-endpoints' => $controllerData['controller'] . '::' . $methodData['methodName']
                             ]);
 
                             if (count($verbs) === 1) {
                                 $pData['parameters'] = $methodData['routeParams'];
+                            }
+
+                            if (!is_null($methodData['routeRequestBody'])) {
+                                $pData['requestBody'] = $methodData['routeRequestBody'];
                             }
 
                             $pathItemData[$verb] = new OpenApiOperation($pData);
@@ -280,227 +349,4 @@ class SwaggerEndpoints extends Endpoints
             echo $e->getMessage();
         }
     }
-
-    /*public static function generateSwaggerJsonV3(array $urlParts, string $jsonFilePath) : void
-    {
-        try
-        {
-            $schemes = ['http'];
-
-            if ($urlParts['scheme'] === 'https') {
-                $schemes[] = 'https';
-            }
-
-            $classes = glob(__DIR__ . DIRECTORY_SEPARATOR . '?*Endpoints.php');
-            $components = [];
-
-            if (count($classes) > 0) {
-                $endpointsStruct = [];
-                
-                foreach ($classes as $idx => $class) {
-                    $className = basename($class, '.php');
-
-                    if ($className === 'SwaggerEndpoints') {
-                        continue;
-                    }
-
-                    $namespace = Utils::makeNamespacePath('App', 'Http', 'Endpoints', $className);
-
-                    $endpointsStruct[$idx] = [];
-                    $endpointsStruct[$idx]['prefix'] = '';
-                    $endpointsStruct[$idx]['controller'] = $className;
-                    $endpointsStruct[$idx]['methods'] = [];
-                    $endpointsStruct[$idx]['tag'] = [];
-
-                    $reflectionClass = new \ReflectionClass('\\' . $namespace);
-
-                    foreach ($reflectionClass->getAttributes() as $attribute) {
-                        $attributeInstance = $attribute->newInstance();
-
-                        if ($attributeInstance instanceof RoutePrefix) {
-                            $endpointsStruct[$idx]['prefix'] = $attributeInstance->path;
-                        }
-
-                        if ($attributeInstance instanceof Tag) {
-                            $endpointsStruct[$idx]['tag'][] = new OpenApiTag($attributeInstance->schemaParams);
-                        }
-
-                        if ($attributeInstance instanceof Schema) {
-                            $components[$attributeInstance->name] = new OpenApiSchema($attributeInstance->schemaParams);
-                        }
-                    }
-
-                    foreach ($reflectionClass->getMethods() as $method) {
-                        $methodName = $method->getName();
-                        $routeVerbs = null;
-                        $routePath = null;
-                        $routeName = null;
-                        $routeResponses = [];
-                        $routeTags = [];
-                        $routeParams = [];
-                        $routeSchemaParams = [];
-
-                        foreach ($method->getAttributes() as $attribute) {
-                            $attributeInstance = $attribute->newInstance();
-
-                            if ($attributeInstance instanceof Route) {
-                                $routeVerbs = strtolower($attributeInstance->verbs);
-                                $routePath = $attributeInstance->path;
-                                $routeName = $attributeInstance->name;
-                                $routeSchemaParams = $attributeInstance->schemaParams;
-                                
-                                if ($routeVerbs === '*') {
-                                    $routeVerbs = 'any';
-                                }
-                                else {
-                                    $routeVerbs = explode('|', $routeVerbs);
-                                }
-                            }
-
-                            if ($attributeInstance instanceof Response) {
-                                $routeResponses[$attributeInstance->statusCode] = new OpenApiResponse($attributeInstance->schemaParams);
-                            }
-
-                            if ($attributeInstance instanceof RouteTag) {
-                                $routeTags[] = $attributeInstance->name;
-                            }
-
-                            if ($attributeInstance instanceof WithParam) {
-                                $routeParams[] = new OpenApiParameter($attributeInstance->schemaParams);
-                            }
-
-                            if ($attributeInstance instanceof Schema) {
-                                $components[$attributeInstance->name] = new OpenApiSchema($attributeInstance->schemaParams);
-                            }
-                        }
-
-                        if (!is_null($routeVerbs)) {
-                            $endpointsStruct[$idx]['methods'][] = ['methodName' => $methodName, 'routeVerbs' => $routeVerbs, 'routePath' => $routePath, 'routeName' => $routeName, 'routeResponses' => $routeResponses, 'routeTags' => $routeTags, 'routeParams' => $routeParams, 'routeSchemaParams' => $routeSchemaParams];
-                        }
-                    }
-                }
-
-                $info = [
-                    'title' => env('SWEETAPI_TITLE', 'SweetAPI'),
-                    'summary' => env('SWEETAPI_SUMMARY', ''),
-                    'description' => env('SWEETAPI_DESCRIPTION', ''),
-                    'termsOfService' => env('SWEETAPI_TERMS_OF_SERVICE', ''),
-                    'contact' => [
-                        'name' => env('SWEETAPI_CONTACT_NAME', ''),
-                        'url' => env('SWEETAPI_CONTACT_URL', ''),
-                        'email' => env('SWEETAPI_CONTACT_EMAIL', '')
-                    ],
-                    'license' => [
-                        'name' => env('SWEETAPI_LICENSE_NAME', ''),
-                        'identifier' => env('SWEETAPI_LICENSE_SPDX', ''),
-                        'url' => env('SWEETAPI_LICENSE_URL', '')
-                    ],
-                    'version' => env('SWEETAPI_OPEN_API_DOC_VERSION', '1.0.0'),
-                ];
-
-                $openapi = [
-                    'swagger' => '3.0',
-                    //'openapi' => '3.0.2',
-                    'info' => $info,
-                    'jsonSchemaDialect' => 'https://spec.openapis.org/oas/3.1/dialect/base',
-                    'servers' => [
-                        'url' => $urlParts['host'] . ($urlParts['port'] === 80 ? '' : ':' . $urlParts['port'])
-                    ],
-                    'paths' => [],
-                    'webhooks' => [],
-                    'components' => $components,
-                    'security' => '',
-                    'tags' => [],
-                    //'host' => ,
-                    //'basePath' => '/',
-                    
-                    //'schemes' => $schemes,
-                    
-                    'externalDocs' => [
-                        'url' => env('SWEETAPI_EXT_DOC_URL', ''),
-                        'description' => env('SWEETAPI_EXT_DESCRIPTION', '')
-                    ],
-                    'x-routes' => []
-                ];
-
-                $endpointsStruct = array_reverse($endpointsStruct);
-
-                foreach ($endpointsStruct as $idx => $controllerData) {
-                    foreach ($controllerData['tag'] as $tag) {
-                        $openapi['tags'][] = $tag;
-                    }
-                    
-                    foreach ($controllerData['methods'] as $methodData) {
-                        $pathName = '';
-
-                        if (trim($controllerData['prefix'], '/') !== '') {
-                            $pathName .= trim($controllerData['prefix'], ' ');
-                        }
-
-                        $pathName .= trim($methodData['routePath'], ' ');
-                        
-                        if (is_string($methodData['routeVerbs'])) {
-                            $verbs = ['get', 'post', 'put', 'patch', 'options', 'delete'];
-                        }
-                        else {
-                            $verbs = $methodData['routeVerbs'];
-                        }
-
-                        array_unshift($methodData['routeTags'], $controllerData['controller']);
-
-                        $produces = [];
-
-                        foreach ($methodData['routeResponses'] as $data) {
-                            $produces[strtolower($data->content)] = true;
-                        }
-
-                        if (empty($produces)) {
-                            $produces['string'] = true;
-                        }
-
-                        $pathItemData = [];
-
-                        if (count($verbs) > 1) {
-                            foreach (['$ref', 'summary', 'description', 'servers'] as $param) {
-                                if (array_key_exists($param, $methodData['routeSchemaParams'])) {
-                                    $pathItemData[$param] = $methodData['routeSchemaParams'][$param];
-                                    unset($methodData['routeSchemaParams'][$param]);
-                                }
-                            }
-
-                            $pathItemData['parameters'] = $methodData['routeParams'];
-                        }
-
-                        foreach ($verbs as $verb) {
-                            $pData = array_merge($methodData['routeSchemaParams'], [
-                                'tags' => $methodData['routeTags'],
-                                'operationId' => $methodData['routeName'] . '_###_' . $verb,
-                                'produces' => array_keys($produces),
-                                'responses' => $methodData['routeResponses'],
-                                'x-endpoints' => $controllerData['controller'] . '::' . $methodData['methodName']
-                            ]);
-
-                            if (count($verbs) === 1) {
-                                $pData['parameters'] = $methodData['routeParams'];
-                            }
-
-                            $pathItemData[$verb] = new OpenApiOperation($pData);
-                        }
-
-                        $openapi['paths'][$pathName] = new OpenApiPathItem($pathItemData);
-                        $openapi['x-routes'][$methodData['routeName']] = $pathName;
-                    }
-                }
-
-                $cebe = new OpenApi($openapi);
-
-                $json = Writer::writeToJson($cebe, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-
-                file_put_contents($jsonFilePath, $json);
-            }
-        }
-        catch (\Throwable $e) {
-            echo $e->getMessage();
-        }
-    }*/
 }
