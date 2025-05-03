@@ -1,6 +1,7 @@
 {
     "name": "fuzzy/fzpkg",
     "description": "Libreria di utilità",
+    "version": "1.0.0",
     "type": "library",
     "require": {
         "php": "^8.2",
