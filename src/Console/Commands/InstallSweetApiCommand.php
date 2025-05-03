@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Fuzzy\Fzpkg\Console\Commands;
 
 use Fuzzy\Fzpkg\Console\Commands\BaseCommand;
-use Fuzzy\Fzpkg\Classes\Utils\Utils;
+use Illuminate\Foundation\Bootstrap\LoadConfiguration;
+use Illuminate\Support\Env;
+use Dotenv\Dotenv;
 use Illuminate\Filesystem\Filesystem;
 use Symfony\Component\Process\Process;
 
@@ -39,19 +41,27 @@ final class InstallSweetApiCommand extends BaseCommand
              $filesystem->chmod($item, 0755);
         }
 
+        $filesystem->replaceInFile('__API_DIRNAME__', $apiName, $newSweetApiPath . '/.env.default');
         $filesystem->move($newSweetApiPath . '/.env.default', $newSweetApiPath . '/.env');
 
         $filesystem->chmod($newSweetApiPath . '/bootstrap/cache', 0755);
         $filesystem->chmod($newSweetApiPath . '/.env', 0600);
 
-        $commands = [];
-        
-        $commands[] = ['cmd' => ['composer', 'install'], 'env' => ['COMPOSER_MEMORY_LIMIT' => '-1']];
-        $commands[] = ['cmd' => ['npm', 'install'], 'env' => []];
-        $commands[] = ['cmd' => ['php', 'artisan', 'config:clear'], 'env' => []];
-        $commands[] = ['cmd' => ['php', 'artisan', 'config:cache'], 'env' => []];
-        $commands[] = ['cmd' => ['php', 'artisan', 'key:generate'], 'env' => []];
-        $commands[] = ['cmd' => ['php', 'artisan', 'migrate'], 'env' => []];
+        app()->setBasePath($newSweetApiPath);
+        app()->useEnvironmentPath($newSweetApiPath);
+
+        Dotenv::create(Env::getRepository(), app()->environmentPath(), app()->environmentFile())->load();
+
+        (new LoadConfiguration())->bootstrap(app());
+
+        $commands = [
+            ['cmd' => ['composer', 'install'], 'env' => ['COMPOSER_MEMORY_LIMIT' => '-1']],
+            ['cmd' => ['npm', 'install'], 'env' => []],
+            ['cmd' => ['php', 'artisan', 'config:clear'], 'env' => []],
+            ['cmd' => ['php', 'artisan', 'config:cache'], 'env' => []],
+            ['cmd' => ['php', 'artisan', 'key:generate'], 'env' => []],
+            ['cmd' => ['php', 'artisan', 'migrate'], 'env' => []]
+        ];
 
         $done = true;
 

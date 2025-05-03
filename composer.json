@@ -1,12 +1,13 @@
 {
     "name": "fuzzy/fzpkg",
-    "description": "File di utilità",
+    "description": "Libreria di utilità",
     "type": "library",
     "require": {
         "php": "^8.2",
         "guzzlehttp/guzzle": "^7.9",
         "cebe/php-openapi": "^1.7",
-        "firebase/php-jwt": "^6.11"
+        "firebase/php-jwt": "^6.11",
+        "nyholm/psr7": "^1.8"
     },
     "license": "MIT",
     "autoload": {
@@ -17,13 +18,13 @@
     "authors": [
         {
             "name": "fuzzy",
-            "email": "viviani.demetrio82@gmail.com"
+            "email": "d.viviani@fuzzy-net.it"
         }
     ],
     "extra": {
         "laravel": {
             "providers": [
-                "Fuzzy\\Fzpkg\\Providers\\PackageServiceProvider"
+                "Fuzzy\\Fzpkg\\FzpkgServiceProvider"
             ],
             "dont-discover": []
         }

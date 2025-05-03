@@ -1,2 +1,4 @@
 /vendor/
+/_github.git/
+/_gitlab.git/
 composer.lock

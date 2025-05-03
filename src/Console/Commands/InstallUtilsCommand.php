@@ -32,10 +32,6 @@ final class InstallUtilsCommand extends BaseCommand
 
         if ($filesystem->exists($laravelBootstrapJsPath)) {
             $filesystem->append($laravelBootstrapJsPath, "
-            
-import * as bootstrap from 'bootstrap';
-window.bootstrap = bootstrap;
-
 import.meta.glob([
     '../assets/**',
 ]);
@@ -60,12 +56,6 @@ window.utils = utils;
         }
 
         /* --- */
-
-        $this->updateNodePackages(function ($packages) {
-            return [
-                'bootstrap' => '^5.3.3',
-            ] + $packages;
-        }, false);
 
         $this->updateNodePackages(function ($packages) {
             return [

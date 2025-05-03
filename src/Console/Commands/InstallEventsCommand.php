@@ -27,37 +27,37 @@ final class InstallEventsCommand extends BaseCommand
         /* --- */
 
         $targets = [
-            'FZ_LOG_ADMIN_LOGIN_SUCCESS_REQUEST=' => [
-                'from' => 'FZ_LOG_ADMIN_LOGIN_SUCCESS_REQUEST=.*$',
-                'to' => 'FZ_LOG_ADMIN_LOGIN_SUCCESS_REQUEST=false'
+            'FZ_LOG_LOGIN_SUCCESS_REQUEST=' => [
+                'from' => 'FZ_LOG_LOGIN_SUCCESS_REQUEST=.*$',
+                'to' => 'FZ_LOG_LOGIN_SUCCESS_REQUEST=false'
             ],
-            'FZ_LOG_ADMIN_LOGIN_SUCCESS_LEVEL=' => [
-                'from' => 'FZ_LOG_ADMIN_LOGIN_SUCCESS_LEVEL=.*$',
-                'to' => 'FZ_LOG_ADMIN_LOGIN_SUCCESS_LEVEL=debug'
+            'FZ_LOG_LOGIN_SUCCESS_LEVEL=' => [
+                'from' => 'FZ_LOG_LOGIN_SUCCESS_LEVEL=.*$',
+                'to' => 'FZ_LOG_LOGIN_SUCCESS_LEVEL=debug'
             ],
-            'FZ_LOG_ADMIN_LOGIN_FAIL_REQUEST=' => [
-                'from' => 'FZ_LOG_ADMIN_LOGIN_FAIL_REQUEST=.*$',
-                'to' => 'FZ_LOG_ADMIN_LOGIN_FAIL_REQUEST=false'
+            'FZ_LOG_LOGIN_FAIL_REQUEST=' => [
+                'from' => 'FZ_LOG_LOGIN_FAIL_REQUEST=.*$',
+                'to' => 'FZ_LOG_LOGIN_FAIL_REQUEST=false'
             ],
-            'FZ_LOG_ADMIN_LOGIN_FAIL_LEVEL=' => [
-                'from' => 'FZ_LOG_ADMIN_LOGIN_FAIL_LEVEL=.*$',
-                'to' => 'FZ_LOG_ADMIN_LOGIN_FAIL_LEVEL=debug'
+            'FZ_LOG_LOGIN_FAIL_LEVEL=' => [
+                'from' => 'FZ_LOG_LOGIN_FAIL_LEVEL=.*$',
+                'to' => 'FZ_LOG_LOGIN_FAIL_LEVEL=debug'
             ],
-            'FZ_LOG_ADMIN_LOGIN_LOCKOUT_REQUEST=' => [
-                'from' => 'FZ_LOG_ADMIN_LOGIN_LOCKOUT_REQUEST=.*$',
-                'to' => 'FZ_LOG_ADMIN_LOGIN_LOCKOUT_REQUEST=false'
+            'FZ_LOG_LOGIN_LOCKOUT_REQUEST=' => [
+                'from' => 'FZ_LOG_LOGIN_LOCKOUT_REQUEST=.*$',
+                'to' => 'FZ_LOG_LOGIN_LOCKOUT_REQUEST=false'
             ],
-            'FZ_LOG_ADMIN_LOGIN_LOCKOUT_LEVEL=' => [
-                'from' => 'FZ_LOG_ADMIN_LOGIN_LOCKOUT_LEVEL=.*$',
-                'to' => 'FZ_LOG_ADMIN_LOGIN_LOCKOUT_LEVEL=debug'
+            'FZ_LOG_LOGIN_LOCKOUT_LEVEL=' => [
+                'from' => 'FZ_LOG_LOGIN_LOCKOUT_LEVEL=.*$',
+                'to' => 'FZ_LOG_LOGIN_LOCKOUT_LEVEL=debug'
             ],
-            'FZ_LOG_ADMIN_LOGIN_MAX_ATTEMPTS=' => [
-                'from' => 'FZ_LOG_ADMIN_LOGIN_MAX_ATTEMPTS=.*$',
-                'to' => 'FZ_LOG_ADMIN_LOGIN_MAX_ATTEMPTS=3'
+            'FZ_LOG_LOGIN_MAX_ATTEMPTS=' => [
+                'from' => 'FZ_LOG_LOGIN_MAX_ATTEMPTS=.*$',
+                'to' => 'FZ_LOG_LOGIN_MAX_ATTEMPTS=3'
             ],
-            'FZ_LOG_ADMIN_LOGIN_DECAY_SECONDS=' => [
-                'from' => 'FZ_LOG_ADMIN_LOGIN_DECAY_SECONDS=.*$',
-                'to' => 'FZ_LOG_ADMIN_LOGIN_DECAY_SECONDS=60'
+            'FZ_LOG_LOGIN_DECAY_SECONDS=' => [
+                'from' => 'FZ_LOG_LOGIN_DECAY_SECONDS=.*$',
+                'to' => 'FZ_LOG_LOGIN_DECAY_SECONDS=60'
             ],
             'FZ_EVENTS_INSTALLED=' => [
                 'from' => 'FZ_EVENTS_INSTALLED=.*$',

@@ -1,4 +1,4 @@
-FZPKG (richiede bootstrap):
+FZPKG:
 
 DA CARTELLA:
 

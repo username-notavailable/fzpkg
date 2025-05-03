@@ -1,6 +1,8 @@
 <?php
 
-namespace App\Http\Middleware;
+declare(strict_types=1);
+
+namespace Fuzzy\Fzpkg\Classes\Utils\Middleares;
 
 use Closure;
 use Illuminate\Http\Request;

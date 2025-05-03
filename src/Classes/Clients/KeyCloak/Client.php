@@ -5,23 +5,34 @@ declare(strict_types=1);
 namespace Fuzzy\Fzpkg\Classes\Clients\KeyCloak;
 
 use GuzzleHttp\Client as GuzzleClient;
+//use GuzzleHttp\RequestOptions;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Redis;
 use GuzzleHttp\Exception\BadResponseException;
+use GuzzleHttp\Exception\ConnectException;
 use Firebase\JWT\JWT;
-use Fuzzy\Fzpkg\Classes\Redis\RedisLock;
-use Fuzzy\Fzpkg\Classes\Clients\KeyCloak\Classes\RequestResult;
+use Fuzzy\Fzpkg\Classes\Utils\Redis\RedisLock;
+use Fuzzy\Fzpkg\Classes\Clients\KeyCloak\Classes\{GuzzleClientHandlers, GuzzleClientHandler, GlobalClientIdx, RequestResult};
+use Nyholm\Psr7\Response;
+use Illuminate\Redis\Connections\Connection;
+use Illuminate\Support\Facades\App;
+use Fuzzy\Fzpkg\Classes\Utils\TestLog;
+use Illuminate\Http\Request;
 
 class Client
 {
     protected $httpClient;
     protected $requestCountMax;
-    protected $requestSleepValue;
+    protected $requestDelayValue;
     protected $redis;
 
-    private $keyCloakHost;
     private $openIdConfigurations;
 
+    private $currentKeycloakClientIdx;
+    private $oldKeycloakClientIdx;
+    private $oldKeycloakClientIdxData;
+
+    public $keycloakLoginHostname;
     public $authType;
     public $authRealm;
     public $authClientId;
@@ -29,68 +40,194 @@ class Client
     public $authPayload;
     public $authPubKeyPath;
     public $authPvtKeyPath;
+    public $authCert;
     public $authSignatureAlgorithm;
 
-    public function __construct(string $keyCloakHost)
+    public $guzzleHandlerName;
+    public $guzzleHandlerClass;
+
+    public function __construct(?string $keycloakClientIdx = null)
     {
         $this->httpClient = new GuzzleClient();
         $this->requestCountMax = 1;
-        $this->requestSleepValue = 2;
+        $this->requestDelayValue = 1000;
         $this->redis = Redis::connection();
 
-        $this->keyCloakHost = rtrim($keyCloakHost, '/');
         $this->openIdConfigurations = [];
 
-        $this->authType = env('KC_AUTH_TYPE', ''); // ClientSecret, SignedJwt, SignedJwtClientSecret
-        $this->authRealm = env('KC_REALM_NAME', 'master');
-        $this->authClientId = env('KC_CLIENT_ID', '');
-        $this->authClientSecret = env('KC_CLIENT_SECRET', '');
-        $this->authPayload = [];
-        $this->authPubKeyPath = storage_path('app/' . env('KC_PUB_KEY_NAME', ''));
-        $this->authPvtKeyPath = storage_path('app/' . env('KC_PVT_KEY_NAME', ''));
-        $this->authSignatureAlgorithm = 'RS256';
+        $this->currentKeycloakClientIdx = null;
+        $this->oldKeycloakClientIdx = null;
+        $this->oldKeycloakClientIdxData = [];
 
-        if ($this->authType === 'SignedJwtClientSecret') {
-            $this->authSignatureAlgorithm = 'HS256';
+        $this->keycloakLoginHostname = '';
+        $this->authType = ''; // ClientSecret, SignedJwt, SignedJwtClientSecret
+        $this->authRealm = '';
+        $this->authClientId = '';
+        $this->authClientSecret = '';
+        $this->authPayload = [];
+        $this->authPubKeyPath = '';
+        $this->authPvtKeyPath = '';
+        $this->authCert = '';
+        $this->authSignatureAlgorithm = '';
+
+        $this->guzzleHandlerName = 'default';
+        $this->guzzleHandlerClass = GuzzleClientHandler::class;
+
+        if (is_null($keycloakClientIdx)) {
+            $keycloakClientIdx = app(GlobalClientIdx::class)->get();
+        }
+
+        if (!$this->setKeycloakClientIdxData($keycloakClientIdx)) {
+            throw new \Exception(__METHOD__ . ': Selected clientIdx not exists ("' . $keycloakClientIdx . '"');
         }
     }
 
-    protected function loadOpenIdConfiguration(string $realm) : bool
+    public function getRealmAuthorizationCodeEndpointUrl(string $redirectUri = '') : ?string
     {
-        $cacheKey = 'kc_' . strtolower($realm) . '_openid_conf';
-
-        if($this->redis->executeRaw(['EXISTS', $cacheKey]) === 1) {
-            $data = $this->redis->executeRaw(['GET', $cacheKey]);
-
-            if (!is_null($data)) {
-                $this->openIdConfigurations[$realm] = json_decode($data, null, 512, JSON_OBJECT_AS_ARRAY | JSON_THROW_ON_ERROR);
-                return true;
+        try {
+            if (!array_key_exists($this->authRealm, $this->openIdConfigurations) && !$this->loadOpenIdConfiguration($this->authRealm)) {
+                throw new \Exception(__METHOD__ . ': Get realm config for realm "' . $this->authRealm . '" failed');
             }
-            else {
-                Log::error(__METHOD__ . ': Read from redis "' . $cacheKey . '" failed');
 
-                $response = $this->makeHttpRequest('GET', $this->keyCloakHost . '/realms/' . $realm . '/.well-known/openid-configuration');
-
-                if ($response->getStatusCode() === 200) {
-                    $this->openIdConfigurations[$realm] = json_decode((string) $response->getBody(), null, 512, JSON_OBJECT_AS_ARRAY | JSON_THROW_ON_ERROR);
-                    return true;
-                }
+            if (!in_array('authorization_code', $this->openIdConfigurations[$this->authRealm]['grant_types_supported'])) {
+                throw new \Exception(__METHOD__ . ': Grant type "authorization_code" not supported for realm "' . $this->authRealm . '"');
             }
+
+            $data = [
+                'nonce' => uniqid(),
+                'client_id' => $this->authClientId,
+                'scope' => 'openid',
+                'response_type' => 'code',
+                'ui_locales' => str_replace('_', '-', App::currentLocale()),
+                'redirect_uri' => !empty($redirectUri) ? $redirectUri : route('fz_authorization_code_callback'),
+                'state' => $this->currentKeycloakClientIdx . '|' . hash('md5', config('app.key') . (string)$this->currentKeycloakClientIdx)
+            ];
+
+            $data = http_build_query($data);
+
+            return $this->openIdConfigurations[$this->authRealm]['authorization_endpoint'] . '?' . $data;
+
+        } catch (\Throwable $e) {
+            Log::error(__METHOD__ . ' (realm = "' . $this->authRealm . '") Exception: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    public function getRealmEndSessioEndpointUrl(string $idTokenHint, string $redirectUri = '') : ?string
+    {
+        try {
+            if (!array_key_exists($this->authRealm, $this->openIdConfigurations) && !$this->loadOpenIdConfiguration($this->authRealm)) {
+                throw new \Exception(__METHOD__ . ': Get realm config for realm "' . $this->authRealm . '" failed');
+            }
+
+            $data = [
+                'client_id' => $this->authClientId,
+                'scope' => 'openid',
+                'ui_locales' => str_replace('_', '-', App::currentLocale()),
+                'post_logout_redirect_uri' => !empty($redirectUri) ? $redirectUri : route('fz_end_user_session_callback'),
+                'state' => $this->currentKeycloakClientIdx . '|' . hash('md5', config('app.key') . (string)$this->currentKeycloakClientIdx)
+            ];
+
+            if (!empty($idTokenHint)) {
+                $data['id_token_hint'] = $idTokenHint;
+            }
+
+            $data = http_build_query($data);
+
+            return $this->openIdConfigurations[$this->authRealm]['end_session_endpoint'] . '?' . $data;
+
+        } catch (\Throwable $e) {
+            Log::error(__METHOD__ . ' (realm = "' . $this->authRealm . '") Exception: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    public function getCurrentKeycloakClientIdx() : ?string
+    {
+        return $this->currentKeycloakClientIdx;
+    }
+
+    public function getOldKeycloakClientIdx() : ?string
+    {
+        return $this->oldKeycloakClientIdx;
+    }
+
+    public function setKeycloakClientIdxData(?string $keycloakClientIdx = null) : bool
+    {
+        if (is_null($keycloakClientIdx)) {
+            $keycloakClientIdx = config('fz.default.keycloak.clientIdx');
+        }
+
+        $clientIdxData = config('fz.keycloak.client.idxs')[$keycloakClientIdx] ?? [];
+
+        if (!empty($clientIdxData)) {
+            if (!is_null($this->currentKeycloakClientIdx)) {
+                $this->oldKeycloakClientIdxData = [
+                    'loginHostname' => $this->keycloakLoginHostname,
+                    'authType' => $this->authType,
+                    'realmName' => $this->authRealm,
+                    'clientId' => $this->authClientId,
+                    'clientSecret' => $this->authClientSecret,
+                    'authPayload' => $this->authPayload,
+                    'authAlg' => $this->authSignatureAlgorithm,
+                    'pubKeyName' => $this->authPubKeyPath,
+                    'pvtKeyName' => $this->authPvtKeyPath,
+                    'certName' => $this->authCert
+                ];
+    
+                $this->oldKeycloakClientIdx = $this->currentKeycloakClientIdx;
+            }
+        
+            $this->keycloakLoginHostname = $clientIdxData['loginHostname'];
+            $this->authType = $clientIdxData['authType'];
+            $this->authRealm = $clientIdxData['realmName'];
+            $this->authClientId = $clientIdxData['clientId'];
+            $this->authClientSecret = $clientIdxData['clientSecret'];
+            $this->authPayload = $clientIdxData['authPayload'];
+            $this->authSignatureAlgorithm = $clientIdxData['authAlg'];
+            $this->authPubKeyPath = storage_path('app/' . $clientIdxData['pubKeyName']);
+            $this->authPvtKeyPath = storage_path('app/' . $clientIdxData['pvtKeyName']);
+            $this->authCert = $clientIdxData['certName'];
+
+            $this->currentKeycloakClientIdx = $keycloakClientIdx;
+
+            return true;
         }
         else {
-            $response = $this->makeHttpRequest('GET', $this->keyCloakHost . '/realms/' . $realm . '/.well-known/openid-configuration');
-
-            if ($response->getStatusCode() === 200) {
-                $this->redis->executeRaw(['SET', $cacheKey, (string) $response->getBody(), 'EX', 36000]);
-                $this->openIdConfigurations[$realm] = json_decode((string) $response->getBody(), null, 512, JSON_OBJECT_AS_ARRAY | JSON_THROW_ON_ERROR);
-                return true;
-            }
+            Log::error(__METHOD__ . ': Keycloak client idx fz.keycloak.client[' . $keycloakClientIdx . '] not found');
+            return false;
         }
-
-        return false;
     }
 
-    public function getOpenIdConfiguration(string $realm) : mixed
+    public function restoreKeycloakClientIdxData() : ?string
+    {
+        if (!is_null($this->oldKeycloakClientIdx)) {
+            $this->keycloakLoginHostname = $this->oldKeycloakClientIdxData['loginHostname'];
+            $this->authType = $this->oldKeycloakClientIdxData['authType'];
+            $this->authRealm = $this->oldKeycloakClientIdxData['realmName'];
+            $this->authClientId = $this->oldKeycloakClientIdxData['clientId'];
+            $this->authClientSecret = $this->oldKeycloakClientIdxData['clientSecret'];
+            $this->authPayload = $this->oldKeycloakClientIdxData['authPayload'];
+            $this->authSignatureAlgorithm = $this->oldKeycloakClientIdxData['authAlg'];
+            $this->authPubKeyPath = $this->oldKeycloakClientIdxData['pubKeyName'];
+            $this->authPvtKeyPath = $this->oldKeycloakClientIdxData['pvtKeyName'];
+            $this->authCert = $this->oldKeycloakClientIdxData['certName'];
+
+            $oldIdx = $this->oldKeycloakClientIdx;
+            $this->currentKeycloakClientIdx = $this->oldKeycloakClientIdx;
+
+            return $oldIdx;
+        }  
+        
+        return null;
+    }
+
+    public function getRedis() : Connection
+    {
+        return $this->redis;
+    }
+
+    public function getOpenIdConfiguration(string $realm) : ?array
     {
         if (array_key_exists($realm, $this->openIdConfigurations)) {
             return $this->openIdConfigurations[$realm];
@@ -100,12 +237,12 @@ class Client
                 return $this->openIdConfigurations[$realm];
             }
             else {
-                return false;
+                return null;
             }
         }
     }
 
-    public function loadRealmCert(string $realm) : mixed
+    public function loadRealmCert(string $realm) : ?RequestResult
     {
         if (!array_key_exists($realm, $this->openIdConfigurations) && !$this->loadOpenIdConfiguration($realm)) {
             Log::error(__METHOD__ . ': Get realm config for realm "' . $realm . '" failed');
@@ -122,7 +259,7 @@ class Client
                 else {
                     Log::error(__METHOD__ . ': Read from redis "' . $cacheKey . '" failed');
 
-                    $response = $this->makeHttpRequest('GET', $this->openIdConfigurations[$realm]['jwks_uri'], []);
+                    $response = $this->doHttp2Request('GET', $this->openIdConfigurations[$realm]['jwks_uri']);
 
                     if ($response->getStatusCode() === 200) {
                         return new RequestResult(false, $response, json_decode((string) $response->getBody(), null, 512, JSON_OBJECT_AS_ARRAY | JSON_THROW_ON_ERROR));
@@ -130,7 +267,7 @@ class Client
                 }
             }
             else {
-                $response = $this->makeHttpRequest('GET', $this->openIdConfigurations[$realm]['jwks_uri'], []);
+                $response = $this->doHttp2Request('GET', $this->openIdConfigurations[$realm]['jwks_uri']);
 
                 if ($response->getStatusCode() === 200) {
                     $this->redis->executeRaw(['SET', $cacheKey, (string) $response->getBody(), 'EX', 36000]);
@@ -141,71 +278,642 @@ class Client
             return new RequestResult(false, $response, []);
         }
 
+        return null;
+    }
+
+    protected function loadOpenIdConfiguration(string $realm) : bool
+    {
+        $cacheKey = 'kc_' . strtolower($realm) . '_openid_conf';
+
+        if($this->redis->executeRaw(['EXISTS', $cacheKey]) === 1) {
+            $data = $this->redis->executeRaw(['GET', $cacheKey]);
+
+            if (!is_null($data)) {
+                $this->openIdConfigurations[$realm] = json_decode($data, null, 512, JSON_OBJECT_AS_ARRAY | JSON_THROW_ON_ERROR);
+                return true;
+            }
+            else {
+                Log::error(__METHOD__ . ': Read from redis "' . $cacheKey . '" failed');
+
+                $response = $this->doHttp2Request('GET', $this->keycloakLoginHostname . '/realms/' . $realm . '/.well-known/openid-configuration');
+
+                if ($response->getStatusCode() === 200) {
+                    $this->openIdConfigurations[$realm] = json_decode((string) $response->getBody(), null, 512, JSON_OBJECT_AS_ARRAY | JSON_THROW_ON_ERROR);
+                    return true;
+                }
+            }
+        }
+        else {
+            $response = $this->doHttp2Request('GET', $this->keycloakLoginHostname . '/realms/' . $realm . '/.well-known/openid-configuration');
+
+            if ($response->getStatusCode() === 200) {
+                $this->redis->executeRaw(['SET', $cacheKey, (string) $response->getBody(), 'EX', 36000]);
+                $this->openIdConfigurations[$realm] = json_decode((string) $response->getBody(), null, 512, JSON_OBJECT_AS_ARRAY | JSON_THROW_ON_ERROR);
+                return true;
+            }
+        }
+
         return false;
     }
 
-    protected function doClientAuth() : mixed
+    public function readClientToken() : ?RequestResult
+    {
+        $cacheKey = 'kc_' . strtolower($this->authRealm) . '_client_auth_token';
+        $lockCacheKeyToken = $cacheKey . '_token';
+
+        if (RedisLock::lock($this->redis, $lockCacheKeyToken)) {
+            $result = $this->loadClientJsonToken($cacheKey);
+
+            RedisLock::unlock($this->redis, $lockCacheKeyToken);
+            return $result;
+        }
+        else {
+            Log::error(__METHOD__ . ': RedisLock::lock() failed ("' . $cacheKey . '")');
+            return null;
+        }
+    }
+
+    public function getClientToken() : ?array
+    {
+        $result = $this->readClientToken();
+
+        if (!is_null($result)) {
+            if ($result->fromCache) {
+                return $result->json;
+            }
+            else {
+                if ($result->rawResponse->getStatusCode() === 200) {
+                    return $result->json;
+                }
+                else {
+                    Log::error(__METHOD__ . ': Get token failed');
+                }
+            }
+        }
+        else {
+            Log::error(__METHOD__ . ': Call readClientToken() failed');
+        }
+
+        return null;
+    }
+    
+    public function getAccessTokenFromRequest(Request $request) : ?string
+    {
+        $parts = explode(' ', $request->header('Authorization'));
+
+        if (count($parts) !== 2 || strtolower(trim($parts[0])) !== 'bearer') {
+            return null;
+        }
+        else {
+            return trim($parts[1]);
+        }
+    }
+
+    public function userClientCredentialsAuth(string $username, string $password) : ?RequestResult
+    {
+        return $this->doClientAuth(['username' => $username, 'password' => $password, 'grant_type' => 'password', 'scope' => 'openid']);
+    }
+
+    public function userAuthorizationCodeAuth(string $authorizationCode, string $redirectUri, string $sessionState) : ?RequestResult
+    {
+        return $this->doClientAuth(['code' => $authorizationCode, 'redirect_uri' => $redirectUri, 'session_state' => $sessionState, 'grant_type' => 'authorization_code']);
+    }
+
+    public function setRequestCountMax(int $countMax)
+    {
+        if ($countMax <= 0) {
+            Log::error(__METHOD__ . ': countMax must be greater than 0');
+            $this->requestCountMax = 1;
+        }
+        else {
+            $this->requestCountMax = $countMax;
+        }
+    }
+
+    public function setRequestDelayValue(int $msDelayValue)
+    {
+        if ($msDelayValue <= 0) {
+            Log::error(__METHOD__ . ': msDelayValue must be greater than 0');
+            $this->requestDelayValue = 1000;
+        }
+        else {
+            $this->requestDelayValue = $msDelayValue;
+        }
+    }
+
+    public function doHttpRequest(string $method, string $requestUrl, array $options = []) : \Psr\Http\Message\ResponseInterface
+    {
+        $requestCount = 0;
+        $requestDone = false;
+        $response = null;
+
+        //$options['debug'] = true;
+
+        if (!isset($options['connect_timeout'])) {
+            $options['connect_timeout'] = 30;
+        }
+
+        $options['handler'] = app(GuzzleClientHandlers::class)->getHandler($this->guzzleHandlerName, $this->guzzleHandlerClass, $options);
+
+        do {
+            try {
+                $response = $this->httpClient->request($method, $requestUrl, $options); 
+
+                $requestDone = true;
+                Log::debug(__METHOD__ . ': HTTP Request OK: ' . $method . ' "' . $requestUrl . '" Status code = ' . $response->getStatusCode() . ' -- Status message = ' . $response->getReasonPhrase(), $options);
+            } 
+            catch (ConnectException $e) {
+                Log::error(__METHOD__ . ': HTTP Request FAILED: ' . $method . ' "' . $requestUrl . '" (ConnectException)', ['options' => $options, 'exception' => $e]);
+
+                $requestCount++;
+
+                if ($requestCount === $this->requestCountMax) {
+                    throw $e;
+                }
+                else {
+                    usleep(($this->requestDelayValue * $requestCount) * 1000);
+                }
+            }
+            catch (BadResponseException $e) {
+                $response = $e->getResponse();
+
+                Log::error(__METHOD__ . ': HTTP Request FAILED: ' . $method . ' "' . $requestUrl . '" Status code = ' . $response->getStatusCode() . ' -- Status message = ' . $response->getReasonPhrase() . ' -- Body = ' . $response->getBody(), ['options' => $options, 'exception' => $e]);
+
+                if ($response->getStatusCode() >= 400 && $response->getStatusCode() <= 499) {
+                    $requestDone = true;
+                }
+                else {
+                    $requestCount++;
+
+                    if ($requestCount === $this->requestCountMax) {
+                        $requestDone = true;
+                    }
+                    else {
+                        usleep(($this->requestDelayValue * $requestCount) * 1000);
+                    }
+                }
+            }
+            catch (\Throwable $e) {
+                Log::error(__METHOD__ . ': HTTP Request FAILED: ' . $method . ' "' . $requestUrl . '" (Exception)', ['options' => $options, 'exception' => $e]);
+
+                $requestCount++;
+
+                if ($requestCount === $this->requestCountMax) {
+                    throw $e;
+                }
+                else {
+                    usleep(($this->requestDelayValue * $requestCount) * 1000);
+                }
+            }
+        } while(!$requestDone);
+
+        return $response;
+    }
+
+    public function doHttp1Request(string $method, string $requestUrl, array $options = []) : \Psr\Http\Message\ResponseInterface
+    {
+        $options['version'] = 1.1;
+        return $this->doHttpRequest($method, $requestUrl, $options);   
+    }
+
+    public function doHttp2Request(string $method, string $requestUrl, array $options = []) : \Psr\Http\Message\ResponseInterface
+    {
+        $options['version'] = 2.0;
+        return $this->doHttpRequest($method, $requestUrl, $options); 
+    }
+
+    public function doRequestWithClientToken(string $method, string $requestUrl, array $options = []) : \Psr\Http\Message\ResponseInterface
+    {
+        $cacheKey = 'kc_' . strtolower($this->authRealm) . '_client_auth_token';
+        $lockCacheKeyToken = $cacheKey . '_token';
+
+        if (RedisLock::lock($this->redis, $lockCacheKeyToken)) {
+            $result = $this->loadClientJsonToken($cacheKey);
+
+            if (!is_null($result)) {
+                if ($result->fromCache) {
+                    $jsonToken = $result->json;
+                }
+                else {
+                    if ($result->rawResponse->getStatusCode() === 200) {
+                        $jsonToken = $result->json;
+                    }
+                    else {
+                        Log::error(__METHOD__ . ': Get token failed ("' . $requestUrl . '")');
+
+                        RedisLock::unlock($this->redis, $lockCacheKeyToken);
+                        TestLog::log(__METHOD__ . ': Return rawResponse "' . $cacheKey . '"');
+                        return $result->rawResponse;
+                    }
+                }
+            }
+            else {
+                Log::error(__METHOD__ . ': Call loadClientJsonToken() failed ("' . $requestUrl . '")');
+
+                RedisLock::unlock($this->redis, $lockCacheKeyToken);
+                return new Response(511, [], 'Call loadClientJsonToken() failed ("' . $requestUrl . '")');
+            }
+        }
+        else {
+            Log::error(__METHOD__ . ': RedisLock::lock() failed for loadClientJsonToken() ("' . $requestUrl . '")');
+            return new Response(511, [], 'RedisLock::lock() failed for loadClientJsonToken() ("' . $requestUrl . '")');
+        }
+
+        if ($jsonToken['token_type'] !== 'Bearer') {
+            Log::error(__METHOD__ . ': Unsupported token type "' . $jsonToken['token_type']. '" (requested Bearer - "' . $requestUrl . '")');
+
+            RedisLock::unlock($this->redis, $lockCacheKeyToken);
+            return new Response(511, [], 'Unsupported token type "' . $jsonToken['token_type']. '" (requested Bearer - "' . $requestUrl . '")');
+        }
+        else {
+            $decoded = self::decodeAccessTokenPayload($jsonToken['access_token']);
+
+            $rTime = $decoded['exp'] - time();
+
+            TestLog::log(__METHOD__ . ': rTime = "' . $rTime . '" (before request)');
+
+            if ($rTime <= 0) { //Scaduto
+                TestLog::log(__METHOD__ . ': Token expired (before request)');
+
+                do
+                {
+                    $done = true;
+
+                    if($this->redis->executeRaw(['EXISTS', $cacheKey]) === 1) {
+                        TestLog::log(__METHOD__ . ': Key cache entry exists for key "' . $cacheKey . '" (before request)');
+                        $done = $this->redis->executeRaw(['DEL', $cacheKey]) === 1;
+                    }
+
+                    if (!$done) {
+                        usleep(100000);
+                    }
+
+                } while (!$done);
+
+                if ($done) {
+                    TestLog::log(__METHOD__ . ': DEL done for key "' . $cacheKey . '"');
+                }
+                else {
+                    TestLog::log(__METHOD__ . ': DEL failed for key "' . $cacheKey . '"');
+                }
+                
+                if (array_key_exists('refresh_token', $jsonToken)) {
+                    TestLog::log(__METHOD__ . ': Try refresh_token for key "' . $cacheKey . '" (before_request)');
+
+                    $result = $this->getRefreshToken($cacheKey, $jsonToken);
+
+                    if (!is_null($result)) {
+                        if ($result->fromCache) {
+                            $jsonToken = $result->json;
+                        }
+                        else {
+                            if ($result->rawResponse->getStatusCode() === 200) {
+                                $jsonToken = $result->json;
+                            }
+                            else {
+                                Log::error(__METHOD__ . ': Token expired renew failed (before request - "' . $requestUrl . '")');
+
+                                RedisLock::unlock($this->redis, $lockCacheKeyToken);
+                                TestLog::log(__METHOD__ . ': Return rawResponse "' . $cacheKey . '"');
+                                return $result->rawResponse;
+                            }
+                        }
+                    }
+                    else {
+                        Log::error(__METHOD__ . ': Call getRefreshToken() failed (before request - "' . $requestUrl . '")');
+
+                        RedisLock::unlock($this->redis, $lockCacheKeyToken);
+                        return new Response(511, [], 'Call getRefreshToken() failed (before request - "' . $requestUrl . '")');
+                    }
+                    
+                    RedisLock::unlock($this->redis, $lockCacheKeyToken);
+                    $tokenIsLocked = false;
+                }
+                else {
+                    RedisLock::unlock($this->redis, $lockCacheKeyToken);
+                    TestLog::log(__METHOD__ . ': No "refresh_token" into JWT token (before request - "' . $requestUrl . '")', $jsonToken);
+                    return $this->doRequestWithClientToken($method, $requestUrl, $options);
+                }
+            }
+            else if ($rTime >= 15) {
+                RedisLock::unlock($this->redis, $lockCacheKeyToken);
+                $tokenIsLocked = false;
+            }
+            else {
+                $tokenIsLocked = true;
+            }
+
+	        $decoded = self::decodeAccessTokenPayload($jsonToken['access_token']);
+
+            TestLog::log(__METHOD__ . ': AccessToken utilizzato per la richiesta (time corrente ' . time() . ')', $decoded);
+
+            $response = $this->doRequestWithAccessToken($jsonToken['access_token'], $method, $requestUrl, $options);
+
+            if ($response->getStatusCode() === 403) {
+                TestLog::log(__METHOD__ . ': Token expired (after request)');
+
+                if ($tokenIsLocked) {
+                    TestLog::log(__METHOD__ . ': Token is locked (after request)');
+
+                    do
+                    {
+                        $done = true;
+
+                        if($this->redis->executeRaw(['EXISTS', $cacheKey]) === 1) {
+                            TestLog::log(__METHOD__ . ': Key cache entry exists for key "' . $cacheKey . '" (after request)');
+                            $done = $this->redis->executeRaw(['DEL', $cacheKey]) === 1;
+                        }
+
+                        if (!$done) {
+                            usleep(100000);
+                        }
+
+                    } while (!$done);
+
+                    if ($done) {
+                        TestLog::log(__METHOD__ . ': DEL done for key "' . $cacheKey . '"');
+                    }
+                    else {
+                        TestLog::log(__METHOD__ . ': DEL failed for key "' . $cacheKey . '"');
+                    }
+                }
+                else {
+                    TestLog::log(__METHOD__ . ': Token is not locked (after request)');
+                }
+
+                if (array_key_exists('refresh_token', $jsonToken)) {
+                    TestLog::log(__METHOD__ . ': Try refresh_token for key "' . $cacheKey . '" (after request)');
+
+                    if ($tokenIsLocked) {
+                        $result = $this->getRefreshToken($cacheKey, $jsonToken);
+
+                        if (!is_null($result)) {
+                            if ($result->fromCache) {
+                                RedisLock::unlock($this->redis, $lockCacheKeyToken);
+                                return $this->doRequestWithClientToken($method, $requestUrl, $options);
+                            }
+                            else {
+                                if ($result->rawResponse->getStatusCode() === 200) {
+                                    RedisLock::unlock($this->redis, $lockCacheKeyToken);
+                                    return $this->doRequestWithClientToken($method, $requestUrl, $options);
+                                }
+                                else {
+                                    Log::error(__METHOD__ . ': Token expired renew failed (after request - "' . $requestUrl . '")');
+
+                                    RedisLock::unlock($this->redis, $lockCacheKeyToken);
+                                    TestLog::log(__METHOD__ . ': Return rawResponse "' . $cacheKey . '"');
+                                    return $result->rawResponse;
+                                }
+                            }
+                        }
+                        else {
+                            Log::error(__METHOD__ . ': Call getRefreshToken() failed (after request - "' . $requestUrl . '")');
+
+                            RedisLock::unlock($this->redis, $lockCacheKeyToken);
+                        }
+                    }
+                    else {
+                        $lockCacheKeyRefresh = $cacheKey . '_refresh';
+
+                        TestLog::log(__METHOD__ . ': Try lock before call getRefreshToken() (token is unlocked)');
+
+                        if (RedisLock::lock($this->redis, $lockCacheKeyRefresh)) {
+                            $result = $this->getRefreshToken($cacheKey, $jsonToken);
+
+                            if (!is_null($result)) {
+                                if ($result->fromCache) {
+                                    RedisLock::unlock($this->redis, $lockCacheKeyRefresh);
+                                    return $this->doRequestWithClientToken($method, $requestUrl, $options);
+                                }
+                                else {
+                                    if ($result->rawResponse->getStatusCode() === 200) {
+                                        RedisLock::unlock($this->redis, $lockCacheKeyRefresh);
+                                        return $this->doRequestWithClientToken($method, $requestUrl, $options);
+                                    }
+                                    else {
+                                        Log::error(__METHOD__ . ': Token expired renew failed (after request - "' . $requestUrl . '")');
+
+                                        RedisLock::unlock($this->redis, $lockCacheKeyRefresh);
+                                        TestLog::log(__METHOD__ . ': Return rawResponse "' . $cacheKey . '"');
+                                        return $result->rawResponse;
+                                    }
+                                }
+                            }
+                            else {
+                                Log::error(__METHOD__ . ': Call getRefreshToken() failed (after request - "' . $requestUrl . '")');
+
+                                RedisLock::unlock($this->redis, $lockCacheKeyRefresh);
+                            }
+                        }
+                        else {
+                            Log::error(__METHOD__ . ': RedisLock::lock() failed for getRefreshToken() ("' . $requestUrl . '")');
+                        }
+                    }
+                }
+                else {
+                    TestLog::log(__METHOD__ . ': No "refresh_token" into JWT token (after request - "' . $requestUrl . '")', $jsonToken);
+                }
+            }
+            
+            if ($tokenIsLocked) {
+                RedisLock::unlock($this->redis, $lockCacheKeyToken);
+            }
+
+            return $response;
+        }
+    }
+
+    public function doRequestWithUserToken(array &$jsonToken, string $method, string $requestUrl, array $options = []) : \Psr\Http\Message\ResponseInterface
+    {
+        if ($jsonToken['token_type'] !== 'Bearer') {
+            Log::error(__METHOD__ . ': Unsupported token type "' . $jsonToken['token_type'] . '" (requested Bearer)');
+            return new Response(511, [], 'Unsupported token type "' . $jsonToken['token_type'] . '" (requested Bearer)');
+        }
+        else {
+            $response = $this->doRequestWithAccessToken($jsonToken['access_token'], $method, $requestUrl, $options);
+
+            if ($response->getStatusCode() === 403 && $this->userTokenIsExpired($jsonToken)) {
+                if (array_key_exists('refresh_token', $jsonToken)) {
+                    $cacheKey = 'kc_' . hash('md5', $jsonToken['access_token']) . '_user_auth_token';
+                    $lockCacheKeyRefresh = $cacheKey . '_refresh';
+    
+                    if (RedisLock::lock($this->redis, $lockCacheKeyRefresh)) {
+                        $result = $this->refreshUserToken($jsonToken);
+    
+                        if (!is_null($result)) {
+                            if ($result->fromCache) {
+                                $jsonToken = $result->json;
+                                RedisLock::unlock($this->redis, $lockCacheKeyRefresh);
+                                $response = $this->doRequestWithUserToken($jsonToken, $method, $requestUrl, $options);
+                            }
+                            else {
+                                if ($result->rawResponse->getStatusCode() === 200) {
+                                    $jsonToken = $result->json;
+                                    RedisLock::unlock($this->redis, $lockCacheKeyRefresh);
+                                    $response = $this->doRequestWithUserToken($jsonToken, $method, $requestUrl, $options);
+                                }
+                                else {
+                                    Log::error(__METHOD__ . ': Token expired renew failed (after request - "' . $requestUrl . '")');
+
+                                    RedisLock::unlock($this->redis, $lockCacheKeyRefresh);
+                                    TestLog::log(__METHOD__ . ': Return rawResponse "' . $cacheKey . '"');
+                                    return $result->rawResponse;
+                                }
+                            }
+                        }
+                        else {
+                            Log::error(__METHOD__ . ': Call getRefreshToken() failed ("' . $requestUrl . '")');
+    
+                            RedisLock::unlock($this->redis, $lockCacheKeyRefresh);
+                        }
+                    }
+                    else {
+                        Log::error(__METHOD__ . ': RedisLock::lock() failed for getRefreshToken() ("' . $requestUrl . '")');
+                    }
+                }
+                else {
+                    TestLog::log(__METHOD__ . ': No "refresh_token" into JWT token ("' . $requestUrl . '")', $jsonToken);
+                }
+            }
+
+            return $response;
+        }
+    }
+
+    public function doRequestWithAccessToken(string $accessToken, string $method, string $requestUrl, array $options = []) : \Psr\Http\Message\ResponseInterface
+    {
+        $options['headers']['authorization'] = 'Bearer ' . $accessToken;
+
+        return $this->doHttp2Request($method, $requestUrl, $options);
+    }
+
+    public function userTokenIsExpired(array $jsonToken) : bool
+    {
+        $decoded = self::decodeAccessTokenPayload($jsonToken['access_token']);
+
+        return ($decoded['exp'] - time()) <= 0;
+    }
+
+    public function refreshUserToken(array $jsonToken) : ?RequestResult
+    {
+        return $this->getRefreshToken(null, $jsonToken);
+    }
+
+    public function proxyKeyCloakAdminRequest(Request $request, array $options = []) : \Psr\Http\Message\ResponseInterface
+    {
+        $idpUri = $request->header('X-Idp-Uri');
+
+        if (empty($idpUri)) {
+            Log::error(__METHOD__ . ': IdpUri is empty');
+            throw new \Exception(__METHOD__ . ': IdpUri is empty for realm "' . $this->authRealm . '"');
+        }
+        else if (!str_starts_with($idpUri, '/admin/realms')) {
+            Log::error(__METHOD__ . ': Invalid IdpUri "' . $idpUri . '"');
+            throw new \Exception(__METHOD__ . ': Invalid IdpUri for realm "' . $this->authRealm . '" (IdpUri = "' . substr($idpUri, 0, 20) . '..."');
+        }
+        else {
+            $accessToken = $this->getAccessTokenFromRequest($request);
+
+            if (!is_null($accessToken)) {
+                $baseOptions = [
+                    'base_uri' => $this->keycloakLoginHostname,
+                    'query' => $request->query(),
+                    'body' => $request->getContent(false),
+                ];
+
+                $baseOptions['headers'] = $request->header();
+
+                if ($request->hasHeader('authorization')) {
+                    unset($baseOptions['headers']['authorization']);
+                }
+
+                $options = array_merge($baseOptions, $options);
+
+                return $this->doRequestWithAccessToken($accessToken, $request->method(), $idpUri, $options);
+            }
+            else {
+                throw new \Exception(__METHOD__ . ': access_token not found into request for idp-uri"' . $idpUri . '"');
+            }
+        }
+    }
+
+    // ---
+
+    public static function decodeAccessToken(string $accessToken) : array
+    {
+        list($headersB64, $payloadB64, $sig) = explode('.', $accessToken);
+        
+        return [
+            'header' => json_decode(base64_decode($headersB64), true),
+            'payload' => json_decode(base64_decode($payloadB64), true),
+            'sig' => $sig
+        ];
+    }
+
+    public static function decodeAccessTokenPayload(string $accessTokenB64) : array
+    {
+        list($headersB64, $payloadB64, $sig) = explode('.', $accessTokenB64);
+        return json_decode(base64_decode($payloadB64), true);
+    }
+
+    // ---
+
+    protected function doClientAuth(array $extraData = []) : ?RequestResult
     {
         switch ($this->authType) {
             case 'ClientSecret':
-                return $this->doClientSecretAuth($this->authRealm, $this->authClientId, $this->authClientSecret);
+                return $this->doClientSecretAuth($extraData, $this->authRealm, $this->authClientId, $this->authClientSecret);
 
             case 'SignedJwt':
-                return $this->doClientSignedJwtAuth($this->authRealm, $this->authClientId, $this->authPvtKeyPath, $this->authPayload, $this->authSignatureAlgorithm);
+                return $this->doClientSignedJwtAuth($extraData, $this->authRealm, $this->authClientId, $this->authPvtKeyPath, $this->authPayload, $this->authSignatureAlgorithm);
 
             case 'SignedJwtClientSecret':
-                return $this->doSignedJwtClientSecretAuth($this->authRealm, $this->authClientId, $this->authClientSecret, $this->authPayload, $this->authSignatureAlgorithm);
+                return $this->doSignedJwtClientSecretAuth($extraData, $this->authRealm, $this->authClientId, $this->authClientSecret, $this->authPayload, $this->authSignatureAlgorithm);
 
             default:
-                throw new \Exception('Unsupported authType "' . $this->authType . '"');
+                Log::error(__METHOD__ . 'Unsupported authType "' . $this->authType . '"');
+                return null;
         }
     }
 
-    public function getToken() : mixed
-    {
-        $cacheKey = 'kc_' . strtolower($this->authRealm) . '_auth_token';
-        $lockCacheKeyToken = $cacheKey . '_getJsonToken';
-
-        if (RedisLock::lock($this->redis, $lockCacheKeyToken)) {
-            $jsonToken = $this->getJsonToken($cacheKey);
-
-            RedisLock::unlock($this->redis, $lockCacheKeyToken);
-            return $jsonToken;
-        }
-        else {
-            return false;
-        }
-    }
-
-    protected function doClientSecretAuth(string $realm, string $clientId, string $clientSecret) : mixed
+    protected function doClientSecretAuth(array $extraData, string $realm, string $clientId, string $clientSecret) : ?RequestResult
     {
         try
         {
             foreach (['realm', 'clientId', 'clientSecret'] as $param) {
                 if (empty($$param)) {
-                    throw new \Exception('Param "' . $param . '" cannot be empty, check auth params');
+                    throw new \Exception(__METHOD__ . ': Param "' . $param . '" cannot be empty, check auth params');
                 }
             }
 
             if (!array_key_exists($realm, $this->openIdConfigurations) && !$this->loadOpenIdConfiguration($realm)) {
-                Log::error(__METHOD__ . ': Get realm config for realm "' . $realm . '" failed');
-                return false;
+                throw new \Exception(__METHOD__ . ': Get realm config for realm "' . $realm . '" failed');
             }
     
             if (!in_array('client_credentials', $this->openIdConfigurations[$realm]['grant_types_supported'])) {
-                Log::error(__METHOD__ . ': Grant type "client_credentials" not supported for realm "' . $realm . '"');
-                return false;
+                throw new \Exception(__METHOD__ . ': Grant type "client_credentials" not supported for realm "' . $realm . '"');
             }
 
             $data = [
+                'scope' => 'openid',
                 'client_id' => $clientId,
                 'client_secret' => $clientSecret,
                 'grant_type' => 'client_credentials'
             ];
-    
+
+            if (!empty($extraData)) {
+                $data = array_merge($data, $extraData);
+            }
+
+            if ($data['grant_type'] !== 'client_credentials') {
+                if (!in_array($data['grant_type'], $this->openIdConfigurations[$realm]['grant_types_supported'])) {
+                    throw new \Exception(__METHOD__ . ': Grant type "' . $data['grant_type'] . '" not supported for realm "' . $realm . '"');
+                }
+            }
+
             $body = http_build_query($data);
     
-            $response = $this->makeHttpRequest('POST', $this->openIdConfigurations[$realm]['token_endpoint'], [
+            $response = $this->doHttp2Request('POST', $this->openIdConfigurations[$realm]['token_endpoint'], [
                 'body' => $body,
                 'headers' => [
                     'ACCEPT' => '*/*',
@@ -220,28 +928,26 @@ class Client
             return new RequestResult(false, $response, []);
         } catch (\Throwable $e) {
             Log::error(__METHOD__ . ' (realm = "' . $realm . '") Exception: ' . $e->getMessage());
-            return false;
+            return null;
         }
     }
 
-    protected function doClientSignedJwtAuth(string $realm, string $clientId, string $pvtKeyPath, array $payload = [], string $signatureAlgorithm = 'RS256') : mixed
+    protected function doClientSignedJwtAuth(array $extraData, string $realm, string $clientId, string $pvtKeyPath, array $payload = [], string $signatureAlgorithm = 'RS256') : ?RequestResult
     {
         try
         {
             foreach (['realm', 'clientId', 'pvtKeyPath', 'signatureAlgorithm'] as $param) {
                 if (empty($$param)) {
-                    throw new \Exception('Param "' . $param . '" cannot be empty, check auth params');
+                    throw new \Exception(__METHOD__ . ': Param "' . $param . '" cannot be empty, check auth params');
                 }
             }
 
             if (!array_key_exists($realm, $this->openIdConfigurations) && !$this->loadOpenIdConfiguration($realm)) {
-                Log::error(__METHOD__ . ': Get realm config for realm "' . $realm . '" failed');
-                return false;
+                throw new \Exception(__METHOD__ . ': Get realm config for realm "' . $realm . '" failed');
             }
     
             if (!in_array('client_credentials', $this->openIdConfigurations[$realm]['grant_types_supported'])) {
-                Log::error(__METHOD__ . ': Grant type "client_credentials" not supported for realm "' . $realm . '"');
-                return false;
+                throw new \Exception(__METHOD__ . ': Grant type "client_credentials" not supported for realm "' . $realm . '"');
             }
 
             $iat = time();
@@ -254,7 +960,7 @@ class Client
                 'sub' => $clientId,
                 'jti' => uniqid(),
                 'nbf' => 0,
-                'aud' => $this->keyCloakHost . '/realms/' . $realm,
+                'aud' => $this->keycloakLoginHostname . '/realms/' . $realm,
                 'iat' => $iat,
                 'exp' => $exp
             ], $payload);
@@ -262,14 +968,25 @@ class Client
             $jwt = JWT::encode($payload, file_get_contents($pvtKeyPath), $signatureAlgorithm);
     
             $data = [
+                'scope' => 'openid',
                 'client_assertion_type' => 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
                 'client_assertion' => $jwt,
                 'grant_type' => 'client_credentials',
             ];
+
+            if (!empty($extraData)) {
+                $data = array_merge($data, $extraData);
+            }
+
+            if ($data['grant_type'] !== 'client_credentials') {
+                if (!in_array($data['grant_type'], $this->openIdConfigurations[$realm]['grant_types_supported'])) {
+                    throw new \Exception(__METHOD__ . ': Grant type "' . $data['grant_type'] . '" not supported for realm "' . $realm . '"');
+                }
+            }
     
             $body = http_build_query($data);
     
-            $response = $this->makeHttpRequest('POST', $this->openIdConfigurations[$realm]['token_endpoint'], [
+            $response = $this->doHttp2Request('POST', $this->openIdConfigurations[$realm]['token_endpoint'], [
                 'body' => $body,
                 'headers' => [
                     'Accept' => '*/*',
@@ -284,28 +1001,26 @@ class Client
             return new RequestResult(false, $response, []);
         } catch (\Throwable $e) {
             Log::error(__METHOD__ . ' (realm = "' . $realm . '") Exception: ' . $e->getMessage());
-            return false;
+            return null;
         }
     }
 
-    protected function doSignedJwtClientSecretAuth(string $realm, string $clientId, string $clientSecret, array $payload = [], string $signatureAlgorithm = 'HS256') : mixed
+    protected function doSignedJwtClientSecretAuth(array $extraData, string $realm, string $clientId, string $clientSecret, array $payload = [], string $signatureAlgorithm = 'HS256') : ?RequestResult
     {
         try
         {
             foreach (['realm', 'clientId', 'clientSecret', 'signatureAlgorithm'] as $param) {
                 if (empty($$param)) {
-                    throw new \Exception('Param "' . $param . '" cannot be empty, check auth params');
+                    throw new \Exception(__METHOD__ . ': Param "' . $param . '" cannot be empty, check auth params');
                 }
             }
 
             if (!array_key_exists($realm, $this->openIdConfigurations) && !$this->loadOpenIdConfiguration($realm)) {
-                Log::error(__METHOD__ . ': Get realm config for realm "' . $realm . '" failed');
-                return false;
+                throw new \Exception(__METHOD__ . ': Get realm config for realm "' . $realm . '" failed');
             }
     
             if (!in_array('client_credentials', $this->openIdConfigurations[$realm]['grant_types_supported'])) {
-                Log::error(__METHOD__ . ': Grant type "client_credentials" not supported for realm "' . $realm . '"');
-                return false;
+                throw new \Exception(__METHOD__ . ': Grant type "client_credentials" not supported for realm "' . $realm . '"');
             }
 
             $iat = time();
@@ -318,7 +1033,7 @@ class Client
                 'sub' => $clientId,
                 'jti' => uniqid(),
                 'nbf' => 0,
-                'aud' => $this->keyCloakHost . '/realms/' . $realm,
+                'aud' => $this->keycloakLoginHostname . '/realms/' . $realm,
                 'iat' => $iat,
                 'exp' => $exp
             ], $payload);
@@ -326,14 +1041,25 @@ class Client
             $jwt = JWT::encode($payload, $clientSecret, $signatureAlgorithm);
     
             $data = [
+                'scope' => 'openid',
                 'client_assertion_type' => 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
                 'client_assertion' => $jwt,
                 'grant_type' => 'client_credentials',
             ];
+
+            if (!empty($extraData)) {
+                $data = array_merge($data, $extraData);
+            }
+
+            if ($data['grant_type'] !== 'client_credentials') {
+                if (!in_array($data['grant_type'], $this->openIdConfigurations[$realm]['grant_types_supported'])) {
+                    throw new \Exception(__METHOD__ . ': Grant type "' . $data['grant_type'] . '" not supported for realm "' . $realm . '"');
+                }
+            }
     
             $body = http_build_query($data);
     
-            $response = $this->makeHttpRequest('POST', $this->openIdConfigurations[$realm]['token_endpoint'], [
+            $response = $this->doHttp2Request('POST', $this->openIdConfigurations[$realm]['token_endpoint'], [
                 'body' => $body,
                 'headers' => [
                     'Accept' => '*/*',
@@ -348,61 +1074,71 @@ class Client
             return new RequestResult(false, $response, []);
         }catch (\Throwable $e) {
             Log::error(__METHOD__ . ' (realm = "' . $realm . '") Exception: ' . $e->getMessage());
-            return false;
+            return null;
         }
     }
 
-    public function doTokenRefresh(array $jsonToken) : mixed
+    protected function doTokenRefresh(array $jsonToken) : ?RequestResult
     {
         try
         {
             if (!array_key_exists($this->authRealm, $this->openIdConfigurations) && !$this->loadOpenIdConfiguration($this->authRealm)) {
-                Log::error(__METHOD__ . ': Get realm config for realm "' . $this->authRealm . '" failed');
-                return false;
+                throw new \Exception(__METHOD__ . ': Get realm config for realm "' . $this->authRealm . '" failed');
             }
     
             if (!in_array('refresh_token', $this->openIdConfigurations[$this->authRealm]['grant_types_supported'])) {
-                Log::error(__METHOD__ . ': Grant type "refresh_token" not supported for realm "' . $this->authRealm . '"');
-                return false;
+                throw new \Exception(__METHOD__ . ': Grant type "client_credentials" not supported for realm "' . $this->authRealm . '"');
             }
 
-            list($headersB64, $payloadB64, $sig) = explode('.', $jsonToken['access_token']);
-            $decoded = json_decode(base64_decode($payloadB64), true);
+            $decoded = self::decodeAccessTokenPayload($jsonToken['access_token']);
 
-            if ($this->authType === 'ClientSecret') {
+            if (array_key_exists('client_id', $decoded)) {
+                if ($this->authType === 'ClientSecret') {
+                    $data = [
+                        'scope' => 'openid',
+                        'client_id' => $decoded['client_id'],
+                        'client_secret' => $this->authClientSecret,
+                        'grant_type' => 'refresh_token',
+                        'refresh_token' => $jsonToken['refresh_token']
+                    ];
+                }
+                else {
+                    $iat = time();
+                    $exp = $iat + 300;
+            
+                    //### https://www.iana.org/assignments/jwt/jwt.xhtml
+            
+                    $payload = [
+                        'iss' => $decoded['client_id'],
+                        'sub' => $decoded['client_id'],
+                        'jti' => $decoded['jti'],
+                        'nbf' => 0,
+                        'aud' => $decoded['iss'],
+                        'iat' => $decoded['iat'],//$iat,
+                        'exp' => $exp
+                    ];
+            
+                    if ($this->authType === 'SignedJwt') {
+                        $jwt = JWT::encode($payload, file_get_contents($this->authPvtKeyPath), $this->authSignatureAlgorithm);
+                    }
+                    else { // SignedJwtClientSecret
+                        $jwt = JWT::encode($payload, $this->authClientSecret, $this->authSignatureAlgorithm);
+                    }
+            
+                    $data = [
+                        'scope' => 'openid',
+                        'client_assertion_type' => 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
+                        'client_assertion' => $jwt,
+                        'grant_type' => 'refresh_token',
+                        'refresh_token' => $jsonToken['refresh_token']
+                    ];
+                }
+            }
+            else { // user
                 $data = [
-                    'client_id' => $decoded['client_id'],
+                    'scope' => 'openid',
+                    'client_id' => $this->authClientId,
                     'client_secret' => $this->authClientSecret,
-                    'grant_type' => 'refresh_token',
-                    'refresh_token' => $jsonToken['refresh_token']
-                ];
-            }
-            else {
-                $iat = time();
-                $exp = $iat + 300;
-        
-                //### https://www.iana.org/assignments/jwt/jwt.xhtml
-        
-                $payload = [
-                    'iss' => $decoded['client_id'],
-                    'sub' => $decoded['client_id'],
-                    'jti' => $decoded['jti'],
-                    'nbf' => 0,
-                    'aud' => $decoded['iss'],
-                    'iat' => $iat,
-                    'exp' => $exp
-                ];
-        
-                if ($this->authType === 'SignedJwt') {
-                    $jwt = JWT::encode($payload, file_get_contents($this->authPvtKeyPath), $this->authSignatureAlgorithm);
-                }
-                else { // SignedJwtClientSecret
-                    $jwt = JWT::encode($payload, $this->authClientSecret, $this->authSignatureAlgorithm);
-                }
-        
-                $data = [
-                    'client_assertion_type' => 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
-                    'client_assertion' => $jwt,
                     'grant_type' => 'refresh_token',
                     'refresh_token' => $jsonToken['refresh_token']
                 ];
@@ -410,7 +1146,7 @@ class Client
 
             $body = http_build_query($data);
 
-            $response = $this->makeHttpRequest('POST', $this->openIdConfigurations[$this->authRealm]['token_endpoint'], [
+            $response = $this->doHttp2Request('POST', $this->openIdConfigurations[$this->authRealm]['token_endpoint'], [
                 'body' => $body,
                 'headers' => [
                     'Accept' => '*/*',
@@ -425,249 +1161,114 @@ class Client
             return new RequestResult(false, $response, []);
         } catch (\Throwable $e) {
             Log::error(__METHOD__ . ' (realm = "' . $this->authRealm . '") Exception: ' . $e->getMessage());
-            return false;
+            return null;
         }
     }
 
-    public function setRequestCountMax(int $countMax)
+    private function loadClientJsonToken(string $cacheKey) : ?RequestResult
     {
-        if ($countMax <= 0) {
-            throw new \Exception('countMax must be greater than 0');
-        }
-        else {
-            $this->requestCountMax = $countMax;
-        }
-    }
+        TestLog::log(__METHOD__ . ': Requested token "' . $cacheKey . '"');
 
-    public function setRequestSleepValue(int $sleepValue)
-    {
-        if ($sleepValue <= 0) {
-            throw new \Exception('sleepValue must be greater than 0');
-        }
-        else {
-            $this->requestSleepValue = $sleepValue;
-        }
-    }
-
-    public function makeHttpRequest(string $method, string $requestUrl, array $options = []) : mixed
-    {
-        $requestCount = 0;
-        $requestDone = false;
-        $response = null;
-
-        do {
-            try {
-                $response = $this->httpClient->request($method, $requestUrl, $options); 
-
-                $requestDone = true;
-                Log::info(__METHOD__ . ': HTTP Request OK: ' . $method . ' "' . $requestUrl . '" Status code = ' . $response->getStatusCode() . ' -- Status message = ' . $response->getReasonPhrase());
-            
-            } catch (BadResponseException $e) {
-                $response = $e->getResponse();
-
-                Log::error(__METHOD__ . ': HTTP Request FAILED: ' . $method . ' "' . $requestUrl . '" Status code = ' . $response->getStatusCode() . ' -- Status message = ' . $response->getReasonPhrase() . ' -- Body = ' . $response->getBody());
-
-                $requestCount++;
-
-                if ($requestCount === $this->requestCountMax) {
-                    $requestDone = true;
-                }
-                else {
-                    sleep($this->requestSleepValue);
-                }
-            }
-
-        } while(!$requestDone);
-
-        return $response;
-    }
-
-    public function makeHttpRequestWithBearerToken(string $method, string $requestUrl, array $options = []) : mixed
-    {
-        $cacheKey = 'kc_' . strtolower($this->authRealm) . '_auth_token';
-        $lockCacheKeyToken = $cacheKey . '_getJsonToken';
-
-        if (RedisLock::lock($this->redis, $lockCacheKeyToken)) {
-            $jsonToken = $this->getJsonToken($cacheKey);
-        }
-        else {
-            return false;
-        }
-
-        if (!$jsonToken) {
-            RedisLock::unlock($this->redis, $lockCacheKeyToken);
-            return false;
-        }
-        else if ($jsonToken['token_type'] !== 'Bearer') {
-            Log::error(__METHOD__ . ': Unsupported token type "' . $jsonToken['token_type']. '" (requested Bearer)');
-
-            RedisLock::unlock($this->redis, $lockCacheKeyToken);
-            return false;
-        }
-        else {
-            list($headersB64, $payloadB64, $sig) = explode('.', $jsonToken['access_token']);
-            $decoded = json_decode(base64_decode($payloadB64), true);
-
-            $rTime = $decoded['exp'] - time();
-
-            if ($rTime <= 0) { //Scaduto
-                do
-                {
-                    $done = true;
-
-                    if($this->redis->executeRaw(['EXISTS', $cacheKey]) === 1) {
-                        $done = $this->redis->executeRaw(['DEL', $cacheKey]) === 1;
-                    }
-
-                    if (!$done) {
-                        usleep(100000);
-                    }
-
-                } while (!$done);
-                
-                if (array_key_exists('refresh_token', $jsonToken)) {
-                    $jsonToken = $this->getRefreshToken($cacheKey, $jsonToken);
-
-                    if (!$jsonToken) {
-                        RedisLock::unlock($this->redis, $lockCacheKeyToken);
-                        return $this->makeHttpRequestWithBearerToken($method, $requestUrl, $options);
-                    }
-                    else {
-                        RedisLock::unlock($this->redis, $lockCacheKeyToken);
-                        $tokenIsLocked = false;
-                    }
-                }
-                else {
-                    RedisLock::unlock($this->redis, $lockCacheKeyToken);
-                    return $this->makeHttpRequestWithBearerToken($method, $requestUrl, $options);
-                }
-            }
-            else if ($rTime >= 15) {
-                RedisLock::unlock($this->redis, $lockCacheKeyToken);
-                $tokenIsLocked = false;
-            }
-            else {
-                $tokenIsLocked = true;
-            }
-
-            $options['headers']['AUTHORIZATION'] = 'Bearer ' . $jsonToken['access_token'];
-
-            $response = $this->makeHttpRequest($method, $requestUrl, $options);
-
-            if ($response->getStatusCode() === 403) {
-                if ($tokenIsLocked) {
-                    do
-                    {
-                        $done = true;
-
-                        if($this->redis->executeRaw(['EXISTS', $cacheKey]) === 1) {
-                            $done = $this->redis->executeRaw(['DEL', $cacheKey]) === 1;
-                        }
-
-                        if (!$done) {
-                            usleep(100000);
-                        }
-
-                    } while (!$done);
-                }
-
-                if (array_key_exists('refresh_token', $jsonToken)) {
-                    if ($tokenIsLocked) {
-                        $this->getRefreshToken($cacheKey, $jsonToken);
-
-                        RedisLock::unlock($this->redis, $lockCacheKeyToken);
-                        //return $this->makeHttpRequestWithBearerToken($method, $requestUrl, $options);
-                    }
-                    else {
-                        $lockCacheKeyRefresh = $cacheKey . '_getRefreshToken';
-
-                        if (RedisLock::lock($this->redis, $lockCacheKeyRefresh)) {
-                            if ($this->getRefreshToken($cacheKey, $jsonToken) !== false) {
-                                RedisLock::unlock($this->redis, $lockCacheKeyToken);
-                                //return $this->makeHttpRequestWithBearerToken($method, $requestUrl, $options);
-                            }
-                            else {
-                                RedisLock::unlock($this->redis, $lockCacheKeyRefresh);
-                                //return $this->makeHttpRequestWithBearerToken($method, $requestUrl, $options);
-                            }
-                        }
-                        /*else {
-                            return $this->makeHttpRequestWithBearerToken($method, $requestUrl, $options);
-                        }*/
-                    }
-                }
-                else {
-                    if ($tokenIsLocked) {
-                        RedisLock::unlock($this->redis, $lockCacheKeyToken);
-                    }
-                }
-
-                return $this->makeHttpRequestWithBearerToken($method, $requestUrl, $options);
-            }
-            else {
-                if ($tokenIsLocked) {
-                    RedisLock::unlock($this->redis, $lockCacheKeyToken);
-                }
-            }
-
-            return $response;
-        }
-    }
-
-    private function getJsonToken(string $cacheKey) : mixed
-    {
         if($this->redis->executeRaw(['EXISTS', $cacheKey]) === 1) {
+            TestLog::log(__METHOD__ . ': Token exists into cache for key "' . $cacheKey . '"');
             $data = $this->redis->executeRaw(['GET', $cacheKey]);
 
             if (!is_null($data)) {
-                return json_decode($data, null, 512, JSON_OBJECT_AS_ARRAY | JSON_THROW_ON_ERROR);
+                TestLog::log(__METHOD__ . ': GET done from cache for key "' . $cacheKey . '"');
+                return new RequestResult(true, null, json_decode($data, true));
             }
             else {
+                TestLog::log(__METHOD__ . ': GET fail from cache for key "' . $cacheKey . '"');
                 Log::error(__METHOD__ . ': Read "' . $cacheKey . '" from redis failed');
             }
+        }
+        else {
+            TestLog::log(__METHOD__ . ': Token not exists into cache for key "' . $cacheKey . '" do request...');
         }
 
         $authResponse = $this->doClientAuth();
 
-        if ($authResponse !== false && $authResponse->rawResponse->getStatusCode() === 200) {
+        if (!is_null($authResponse) && $authResponse->rawResponse->getStatusCode() === 200) {
+            TestLog::log(__METHOD__ . ': Save new token into cache for key "' . $cacheKey . '"');
+
             do
             {
                 $result = $this->redis->executeRaw(['SET', $cacheKey, json_encode($authResponse->json, JSON_FORCE_OBJECT | JSON_THROW_ON_ERROR), 'EX', $authResponse->json['expires_in']]);
 
-                if ($result === 'OK') {
-                    return $authResponse->json;
-                }
-                else {
+                if ($result !== 'OK') {
                     usleep(100000);
                 }
 
             } while ($result !== 'OK');
+
+            if ($result === 'OK') {
+                TestLog::log(__METHOD__ . ': SET done from cache for key "' . $cacheKey . '"');
+            }
+            else {
+                TestLog::log(__METHOD__ . ': SET done from cache for key "' . $cacheKey . '"');
+            }
         }
         else {
-            return false;
+            if (is_null($authResponse)) {
+                TestLog::log(__METHOD__ . ': Auth is null, new token NOT saved into cache for key "' . $cacheKey . '"');
+            }
+            else {
+                TestLog::log(__METHOD__ . ': Auth response != 200, new token NOT saved into cache for key "' . $cacheKey . '"', ['statusCode' => $authResponse->rawResponse->getStatusCode()]);
+            }
         }
+
+        return $authResponse;
     }
 
-    private function getRefreshToken(string $cacheKey, mixed $oldJsonToken) : mixed
+    private function getRefreshToken(?string $cacheKey, array $oldJsonToken) : ?RequestResult
     {
+        TestLog::log(__METHOD__ . ': Requested refresh token "' . $cacheKey . '"', self::decodeAccessToken($oldJsonToken['access_token']));
+
+        $decoded = self::decodeAccessTokenPayload($oldJsonToken['access_token']);
+
+        $rTime = $decoded['exp'] - time();
+
+        if ($rTime > 0) { //Non Scaduto
+            TestLog::log(__METHOD__ . ': Requested refersh_token but old token is not expired "' . $cacheKey . '"');
+            return new RequestResult(true, null, $oldJsonToken);
+        }
+
         $authResponse = $this->doTokenRefresh($oldJsonToken);
 
-        if ($authResponse !== false && $authResponse->rawResponse->getStatusCode() === 200) {
-            do
-            {
-                $result = $this->redis->executeRaw(['SET', $cacheKey, json_encode($authResponse->json, JSON_FORCE_OBJECT | JSON_THROW_ON_ERROR), 'EX', $authResponse->json['expires_in']]);
+        if (!is_null($authResponse) && $authResponse->rawResponse->getStatusCode() === 200) {
+            if (!is_null($cacheKey)) {
+                TestLog::log(__METHOD__ . ': Save fresh token into cache for key "' . $cacheKey . '"');
+
+                do
+                {
+                    $result = $this->redis->executeRaw(['SET', $cacheKey, json_encode($authResponse->json, JSON_FORCE_OBJECT | JSON_THROW_ON_ERROR), 'EX', $authResponse->json['expires_in']]);
+
+                    if ($result !== 'OK') {
+                        usleep(100000);
+                    }
+
+                } while ($result !== 'OK');
 
                 if ($result === 'OK') {
-                    return $authResponse->json;
+                    TestLog::log(__METHOD__ . ': SET done from cache for key "' . $cacheKey . '"');
                 }
                 else {
-                    usleep(100000);
+                    TestLog::log(__METHOD__ . ': SET done from cache for key "' . $cacheKey . '"');
                 }
-
-            } while ($result !== 'OK');
+            }
+            else {
+                TestLog::log(__METHOD__ . ': CacheKey is null, cache not required');
+            }
         }
         else {
-            return false;
+            if (is_null($authResponse)) {
+                TestLog::log(__METHOD__ . ': Auth is null, new token NOT saved into cache for key "' . $cacheKey . '"');
+            }
+            else {
+                TestLog::log(__METHOD__ . ': Auth response != 200, new token NOT saved into cache for key "' . $cacheKey . '"', ['statusCode' => $authResponse->rawResponse->getStatusCode()]);
+            }
         }
+
+        return $authResponse;
     }
 }

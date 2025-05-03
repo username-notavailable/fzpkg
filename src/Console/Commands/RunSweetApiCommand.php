@@ -4,7 +4,6 @@ namespace Fuzzy\Fzpkg\Console\Commands;
 
 use Fuzzy\Fzpkg\Classes\Utils\Utils;
 use Fuzzy\Fzpkg\Classes\SweetApi\Attributes\Router\{RoutePrefix, Route, BaseMiddleware};
-use Symfony\Component\Console\Input\InputOption;
 use Illuminate\Foundation\Bootstrap\LoadConfiguration;
 use Illuminate\Support\Env;
 use Dotenv\Dotenv;
@@ -91,7 +90,19 @@ final class RunSweetApiCommand extends StartCommand
 
                 $reflectionClass = new ReflectionClass('\\' . $endpointsStruct[$idx]['use']);
 
-                foreach ($reflectionClass->getAttributes() as $attribute) {
+                $rfClass = $reflectionClass;
+
+                $attributes = [];
+
+                while ($rfClass) {
+                    foreach ($rfClass->getAttributes() as $attribute) {
+                        $attributes[] = $attribute;
+                    }
+
+                    $rfClass = $rfClass->getParentClass();
+                }
+
+                foreach ($attributes as $attribute) {
                     $attributeInstance = $attribute->newInstance();
 
                     if ($attributeInstance instanceof RoutePrefix) {
