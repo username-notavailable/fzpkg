@@ -175,7 +175,8 @@ final class FzpkgServiceProvider extends ServiceProvider
     
             if (!in_array($useLocale, self::getAvailableLocales())) {
                 Log::info(__METHOD__ . ': Invalid locale "' . $useLocale . '"');
-                $useLocale = config('fz.i18n.locales')[0];
+
+                $useLocale = array_key_first(config('fz.i18n.locales'));
             }
     
             App::setLocale($useLocale);
