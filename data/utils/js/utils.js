@@ -20,8 +20,8 @@ function addCustomEventListener(selector, event, handler, rootSelector = 'body')
 }
 
 function serializeFormData(form) {
-    var formData = new FormData(form);
-    var serializedData = {};
+    let formData = new FormData(form);
+    let serializedData = {};
   
     for (var [name, value] of formData) {
         if (serializedData[name]) {
