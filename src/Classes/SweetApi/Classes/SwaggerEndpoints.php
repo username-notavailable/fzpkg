@@ -41,55 +41,21 @@ use cebe\openapi\spec\Example as OpenApiExample;
 use cebe\openapi\spec\Link as OpenApiLink;
 use cebe\openapi\spec\Callback as OpenApiCallback;
 use cebe\openapi\Writer;
-use Fuzzy\Fzpkg\Classes\Clients\KeyCloak\Client;
-use App\Http\Classes\{ApiResponse, ApiErrorResponse};
 
-#[RoutePrefix(path: '/swagger')]
 class SwaggerEndpoints
 {
-    #[Get(path: '/docs', name: 'swagger_index')]
-    public function index()
-    {
-        $urlParts = parse_url(url()->current());
-        $url = $urlParts['scheme'] . '://' . $urlParts['host'] . ($urlParts['port'] === 80 ? '' : ':' . $urlParts['port']);
-
-        return response(str_replace(['{{ swagger_json_url }}', '{{ base_href }}'], [route('swagger_json'), $url], file_get_contents(base_path('sweetapi/swagger_index.html'))), 200)->header('Content-Type', 'text/html');
-    }
-
-    #[Get(path: '/json', name: 'swagger_json')]
-    public function json()
-    {
-        $jsonFilePath = base_path(config('fz.default.sweetapi.jsonFilePath', 'sweetapi/swagger.json'));
-    
-        if (!file_exists($jsonFilePath) || (config('app.env') === 'local' && config('fz.default.sweetapi.repleceJsonIfExists', false))) {
-            self::generateSwaggerJson(parse_url(url()->current()), $jsonFilePath);
-            chmod($jsonFilePath, 0666);
-        }
-
-        return response(file_get_contents($jsonFilePath), 200)->header('Content-Type', 'application/json');
-    }
-
-    #[Get(path: '/get-token', name: 'swagger_get_token')]
-    public function getClientToken()
-    {
-        $jsonToken = (new Client())->getClientToken();
-
-        if (!$jsonToken) {
-            return new ApiErrorResponse('getClientToken() failed', [], 500);
-        }
-        else {
-            return new ApiResponse($jsonToken);
-        }
-    }
-
     public static function generateSwaggerJson(array $urlParts, string $jsonFilePath) : void
     {
         try
         {
-            $schemes = ['http'];
+            $schemes = [];
 
             if ($urlParts['scheme'] === 'https') {
                 $schemes[] = 'https';
+            }
+
+            if (empty($schemes)) {
+                $schemes[] = 'http';
             }
 
             $components = [
@@ -107,7 +73,7 @@ class SwaggerEndpoints
             $servers = [];
             $security = [];
 
-            $classes = glob(app_path('Http/Endpoints/?*Endpoints.php'));
+            $classes = glob(app_path('Http/Controllers/?*Controller.php'));
 
             if (count($classes) > 0) {
                 $endpointsStruct = [];
@@ -115,11 +81,7 @@ class SwaggerEndpoints
                 foreach ($classes as $idx => $class) {
                     $className = basename($class, '.php');
 
-                    if ($className === 'SwaggerEndpoints') {
-                        continue;
-                    }
-
-                    $namespace = Utils::makeNamespacePath('App', 'Http', 'Endpoints', $className);
+                    $namespace = Utils::makeNamespacePath('App', 'Http', 'Controllers', $className);
 
                     $endpointsStruct[$idx] = [];
                     $endpointsStruct[$idx]['prefix'] = '';
@@ -268,7 +230,23 @@ class SwaggerEndpoints
                 ];
 
                 if (empty($servers)) {
-                    $servers[] = new OpenApiServer(['url' => $urlParts['host'] . ($urlParts['port'] === 80 ? '' : ':' . $urlParts['port'])]);
+                    if (!isset($urlParts['port'])) {
+                        $port = '';
+                    }
+                    else {
+                        $port = ':' . $urlParts['port'];
+                    }
+
+                    if ($urlParts['scheme'] === 'http' && $port === 80) {
+                        $port = '';
+                    }
+                    else if ($urlParts['scheme'] === 'https' && $port === 443) {
+                        $port = '';
+                    }
+
+                    $url = $urlParts['host'] . $port;
+
+                    $servers[] = new OpenApiServer(['url' => $url]);
                 }
 
                 $openapi = [
