@@ -5,25 +5,25 @@ declare(strict_types=1);
 namespace Fuzzy\Fzpkg;
 
 use Illuminate\Support\ServiceProvider;
-use Fuzzy\Fzpkg\Console\Commands\ExportSweetApiCommand;
+//use Fuzzy\Fzpkg\Console\Commands\ExportSweetApiCommand;
 use Fuzzy\Fzpkg\Console\Commands\InstallEventsCommand;
 use Fuzzy\Fzpkg\Console\Commands\InstallLanguagesCommand;
-use Fuzzy\Fzpkg\Console\Commands\InstallLivewireLayoutsCommand;
+//use Fuzzy\Fzpkg\Console\Commands\InstallLivewireLayoutsCommand;
 use Fuzzy\Fzpkg\Console\Commands\InstallScrapersCommand;
 use Fuzzy\Fzpkg\Console\Commands\InstallStubsCommand;
-use Fuzzy\Fzpkg\Console\Commands\InstallSweetApiCommand;
+//use Fuzzy\Fzpkg\Console\Commands\InstallSweetApiCommand;
 use Fuzzy\Fzpkg\Console\Commands\InstallUtilsCommand;
-use Fuzzy\Fzpkg\Console\Commands\MakeLivewireFormCommand;
-use Fuzzy\Fzpkg\Console\Commands\MakeSweetApiEndpointsCommand;
+//use Fuzzy\Fzpkg\Console\Commands\MakeLivewireFormCommand;
+//use Fuzzy\Fzpkg\Console\Commands\MakeSweetApiEndpointsCommand;
 use Fuzzy\Fzpkg\Console\Commands\MakeThemeComponentCommand;
 use Fuzzy\Fzpkg\Console\Commands\MakeThemeViewCommand;
-use Fuzzy\Fzpkg\Console\Commands\MakeVoltComponentCommand;
-use Fuzzy\Fzpkg\Console\Commands\ReloadSweetApiCommand;
+//use Fuzzy\Fzpkg\Console\Commands\MakeVoltComponentCommand;
+//use Fuzzy\Fzpkg\Console\Commands\ReloadSweetApiCommand;
 use Fuzzy\Fzpkg\Console\Commands\RunScrapersCommand;
-use Fuzzy\Fzpkg\Console\Commands\RunSweetApiCommand;
+//use Fuzzy\Fzpkg\Console\Commands\RunSweetApiCommand;
 use Fuzzy\Fzpkg\Console\Commands\RunThemeCmdCommand;
-use Fuzzy\Fzpkg\Console\Commands\StatusSweetApiCommand; 
-use Fuzzy\Fzpkg\Console\Commands\StopSweetApiCommand;
+//use Fuzzy\Fzpkg\Console\Commands\StatusSweetApiCommand; 
+//use Fuzzy\Fzpkg\Console\Commands\StopSweetApiCommand;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\Log;
@@ -58,8 +58,6 @@ final class FzpkgServiceProvider extends ServiceProvider
         $this->app->scoped(GlobalClientIdx::class, function() {
             return new GlobalClientIdx();
         });
-
-        //App::alias('KcGuard', KcGuard::class);
     }
 
     public function boot(): void
@@ -94,33 +92,33 @@ final class FzpkgServiceProvider extends ServiceProvider
             __DIR__.'/../config/fz.php' => config_path('fz.php'),
         ]);
 
-        if ($this->app->runningInConsole()) { //### FIXME: Commentare i comandi SweetAPI ###
+        if ($this->app->runningInConsole()) {
             $commands = [
-                ExportSweetApiCommand::class,
+                //ExportSweetApiCommand::class,
                 InstallEventsCommand::class,
                 InstallLanguagesCommand::class,
-                InstallLivewireLayoutsCommand::class,
+                //InstallLivewireLayoutsCommand::class,
                 InstallScrapersCommand::class,
                 InstallStubsCommand::class,
-                InstallSweetApiCommand::class,
+                //InstallSweetApiCommand::class,
                 InstallUtilsCommand::class,
-                MakeLivewireFormCommand::class,
-                MakeSweetApiEndpointsCommand::class,
+                //MakeLivewireFormCommand::class,
+                //MakeSweetApiEndpointsCommand::class,
                 MakeThemeComponentCommand::class,
                 MakeThemeViewCommand::class,
-                MakeVoltComponentCommand::class,
+                //MakeVoltComponentCommand::class,
                 RunScrapersCommand::class,
                 RunThemeCmdCommand::class
             ];
             
-            if (\Composer\InstalledVersions::isInstalled('laravel/octane')) {
+            /*if (\Composer\InstalledVersions::isInstalled('laravel/octane')) {
                 $commands = array_merge($commands, [
                     ReloadSweetApiCommand::class,
                     RunSweetApiCommand::class,
                     StatusSweetApiCommand::class,
                     StopSweetApiCommand::class
                 ]);
-            }
+            }*/
 
             $this->commands($commands);
         }
