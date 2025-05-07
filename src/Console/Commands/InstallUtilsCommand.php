@@ -68,25 +68,6 @@ window.utils = utils;
         /* --- */
 
         $targets = [
-            'APP_LOCALE=' => [
-                'from' => 'APP_LOCALE=.*$',
-                'to' => 'APP_LOCALE=it'
-            ],
-            'APP_FAKER_LOCALE=' => [
-                'from' => 'APP_FAKER_LOCALE=.*$',
-                'to' => 'APP_FAKER_LOCALE=it_IT'
-            ],
-            'APP_URL=' => [
-                'from' => 'APP_URL=.*$',
-                'to' => 'APP_URL=http://localhost:8000'
-            ]
-        ];
-
-        $this->updateEnvFile($targets);
-
-        /* --- */
-
-        $targets = [
             'FZ_UTILS_INSTALLED=' => [
                 'from' => 'FZ_UTILS_INSTALLED=.*$',
                 'to' => 'FZ_UTILS_INSTALLED=true'
