@@ -237,10 +237,7 @@ class SwaggerEndpoints
                         $port = ':' . $urlParts['port'];
                     }
 
-                    if ($urlParts['scheme'] === 'http' && $port === 80) {
-                        $port = '';
-                    }
-                    else if ($urlParts['scheme'] === 'https' && $port === 443) {
+                    if (($urlParts['scheme'] === 'http' && $port === 80) ||($urlParts['scheme'] === 'https' && $port === 443)) {
                         $port = '';
                     }
 
