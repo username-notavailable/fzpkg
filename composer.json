@@ -1,6 +1,6 @@
 {
     "name": "fuzzy/fzpkg",
-    "description": "Libreria di utilità",
+    "description": "Utility library (more or less..)",
     "type": "library",
     "require": {
         "php": "^8.2",
