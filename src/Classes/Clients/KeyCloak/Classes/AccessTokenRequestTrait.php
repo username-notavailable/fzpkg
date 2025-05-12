@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Fuzzy\Fzpkg\Classes\Clients\KeyCloak\Classes;
 
-use Closure;
 use Fuzzy\Fzpkg\Classes\Clients\KeyCloak\Client;
 use Illuminate\Http\Request;
 use Firebase\JWT\{JWT, JWK};
@@ -118,7 +117,7 @@ trait AccessTokenRequestTrait
                 return ['code' => 412, 'reason' => 'Invalid token type (Required client token type, "client_id" not found)'];
             }
             else {
-                return $decoded;
+                return ['code' => 200, 'decoded' => $decoded];
             }
         }
     }
@@ -137,7 +136,7 @@ trait AccessTokenRequestTrait
                 return ['code' => 412, 'reason' => 'Invalid token type (Required user token type, "preferred_username" not found)'];
             }
             else {
-                return $decoded;
+                return ['code' => 200, 'decoded' => $decoded];
             }
         }
     }
