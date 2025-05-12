@@ -132,8 +132,8 @@ trait AccessTokenRequestTrait
         else {
             $decoded = json_decode(json_encode($result['decoded']), true); // StdClass2Array
 
-            if (!array_key_exists('preferred_username', $decoded)) {
-                return ['code' => 412, 'reason' => 'Invalid token type (Required user token type, "preferred_username" not found)'];
+            if (array_key_exists('client_id', $decoded)) {
+                return ['code' => 412, 'reason' => 'Invalid token type (Required user token type, "client_id" found)'];
             }
             else {
                 return ['code' => 200, 'decoded' => $decoded];
