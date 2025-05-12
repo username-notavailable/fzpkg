@@ -60,11 +60,11 @@ trait AccessTokenRequestTrait
                             }
                         }
                         else {
-                            $jwks = json_decode($redis->executeRaw(['GET', $cacheKey]), JSON_OBJECT_AS_ARRAY | JSON_THROW_ON_ERROR);
+                            $jwks = json_decode($redis->executeRaw(['GET', $cacheKey]), true, JSON_OBJECT_AS_ARRAY | JSON_THROW_ON_ERROR);
                             RedisLock::unlock($redis, $cacheKey);
                         }
     
-                        return ['code' => 200, 'decoded' => WT::decode($jsonToken, JWK::parseKeySet($jwks))];
+                        return ['code' => 200, 'decoded' => JWT::decode($jsonToken, JWK::parseKeySet($jwks))];
                     }
                     else {
                         Log::error(__METHOD__ . ': Set cache lock failed');
