@@ -254,7 +254,7 @@ class Client
                 $data = $this->redis->executeRaw(['GET', $cacheKey]);
 
                 if (!is_null($data)) {
-                    return new RequestResult(true, null, json_decode($data, null, 512, JSON_OBJECT_AS_ARRAY | JSON_THROW_ON_ERROR));
+                    return new RequestResult(true, null, json_decode($data, true));
                 }
                 else {
                     Log::error(__METHOD__ . ': Read from redis "' . $cacheKey . '" failed');
@@ -262,7 +262,7 @@ class Client
                     $response = $this->doHttp2Request('GET', $this->openIdConfigurations[$realm]['jwks_uri']);
 
                     if ($response->getStatusCode() === 200) {
-                        return new RequestResult(false, $response, json_decode((string) $response->getBody(), null, 512, JSON_OBJECT_AS_ARRAY | JSON_THROW_ON_ERROR));
+                        return new RequestResult(false, $response, json_decode((string) $response->getBody(), true));
                     }
                 }
             }
@@ -271,7 +271,7 @@ class Client
 
                 if ($response->getStatusCode() === 200) {
                     $this->redis->executeRaw(['SET', $cacheKey, (string) $response->getBody(), 'EX', 36000]);
-                    return new RequestResult(false, $response, json_decode((string) $response->getBody(), null, 512, JSON_OBJECT_AS_ARRAY | JSON_THROW_ON_ERROR));
+                    return new RequestResult(false, $response, json_decode((string) $response->getBody(), true));
                 }
             }
 
@@ -289,7 +289,7 @@ class Client
             $data = $this->redis->executeRaw(['GET', $cacheKey]);
 
             if (!is_null($data)) {
-                $this->openIdConfigurations[$realm] = json_decode($data, null, 512, JSON_OBJECT_AS_ARRAY | JSON_THROW_ON_ERROR);
+                $this->openIdConfigurations[$realm] = json_decode($data, true);
                 return true;
             }
             else {
@@ -298,7 +298,7 @@ class Client
                 $response = $this->doHttp2Request('GET', $this->keycloakLoginHostname . '/realms/' . $realm . '/.well-known/openid-configuration');
 
                 if ($response->getStatusCode() === 200) {
-                    $this->openIdConfigurations[$realm] = json_decode((string) $response->getBody(), null, 512, JSON_OBJECT_AS_ARRAY | JSON_THROW_ON_ERROR);
+                    $this->openIdConfigurations[$realm] = json_decode((string) $response->getBody(), true);
                     return true;
                 }
             }
@@ -308,7 +308,7 @@ class Client
 
             if ($response->getStatusCode() === 200) {
                 $this->redis->executeRaw(['SET', $cacheKey, (string) $response->getBody(), 'EX', 36000]);
-                $this->openIdConfigurations[$realm] = json_decode((string) $response->getBody(), null, 512, JSON_OBJECT_AS_ARRAY | JSON_THROW_ON_ERROR);
+                $this->openIdConfigurations[$realm] = json_decode((string) $response->getBody(), true);
                 return true;
             }
         }
@@ -922,7 +922,7 @@ class Client
             ]);
     
             if ($response->getStatusCode() === 200) {
-                return new RequestResult(false, $response, json_decode((string) $response->getBody(), null, 512, JSON_OBJECT_AS_ARRAY | JSON_THROW_ON_ERROR));
+                return new RequestResult(false, $response, json_decode((string) $response->getBody(), true));
             }
     
             return new RequestResult(false, $response, []);
@@ -995,7 +995,7 @@ class Client
             ]);
     
             if ($response->getStatusCode() === 200) {
-                return new RequestResult(false, $response, json_decode((string) $response->getBody(), null, 512, JSON_OBJECT_AS_ARRAY | JSON_THROW_ON_ERROR));
+                return new RequestResult(false, $response, json_decode((string) $response->getBody(), true));
             }
     
             return new RequestResult(false, $response, []);
@@ -1068,7 +1068,7 @@ class Client
             ]);
     
             if ($response->getStatusCode() === 200) {
-                return new RequestResult(false, $response, json_decode((string) $response->getBody(), null, 512, JSON_OBJECT_AS_ARRAY | JSON_THROW_ON_ERROR));
+                return new RequestResult(false, $response, json_decode((string) $response->getBody(), true));
             }
     
             return new RequestResult(false, $response, []);
@@ -1155,7 +1155,7 @@ class Client
             ]);
     
             if ($response->getStatusCode() === 200) {
-                return new RequestResult(false, $response, json_decode((string) $response->getBody(), null, 512, JSON_OBJECT_AS_ARRAY | JSON_THROW_ON_ERROR));
+                return new RequestResult(false, $response, json_decode((string) $response->getBody(), true));
             }
     
             return new RequestResult(false, $response, []);

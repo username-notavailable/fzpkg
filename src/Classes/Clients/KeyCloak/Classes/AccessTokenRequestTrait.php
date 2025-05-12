@@ -60,7 +60,7 @@ trait AccessTokenRequestTrait
                             }
                         }
                         else {
-                            $jwks = json_decode($redis->executeRaw(['GET', $cacheKey]), true, JSON_OBJECT_AS_ARRAY | JSON_THROW_ON_ERROR);
+                            $jwks = json_decode($redis->executeRaw(['GET', $cacheKey]), true);
                             RedisLock::unlock($redis, $cacheKey);
                         }
     
