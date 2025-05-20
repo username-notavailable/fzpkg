@@ -13,8 +13,6 @@ use Firebase\JWT\ExpiredException;
 use DomainException;
 use InvalidArgumentException;
 use UnexpectedValueException;
-use Illuminate\Support\Facades\Redis;
-use Fuzzy\Fzpkg\Classes\Utils\Redis\RedisLock;
 use Illuminate\Support\Facades\Log;
 
 trait AccessTokenRequestTrait
@@ -36,39 +34,16 @@ trait AccessTokenRequestTrait
                 else {
                     $jsonToken = trim($parts[1]);
 
-                    $client = new Client();
-
-                    $redis = Redis::connection();
-
-                    $cacheKey = 'kc_realm_' . strtolower($client->authRealm) . '_cert';
-
-                    if (RedisLock::lock($redis, $cacheKey)) {
-                        if($redis->executeRaw(['EXISTS', $cacheKey]) !== 1) {
-                            $result = $client->loadRealmCert($client->authRealm);
+                    $result = (Client::create())->loadRealmCert($client->authRealm);
     
-                            if (!$result || (!$result->fromCache && $result->rawResponse->getStatusCode() !== 200)) {
-                                RedisLock::unlock($redis, $cacheKey);
-                                
-                                Log::error(__METHOD__ . ': Load realm cert failed');
-                                return ['code' => 500, 'reason' => 'Internal error'];
-                            }
-                            else {
-                                $redis->executeRaw(['SET', $cacheKey, json_encode($result->json, JSON_FORCE_OBJECT | JSON_THROW_ON_ERROR), 'EX', 31536000]);
-                                RedisLock::unlock($redis, $cacheKey);
-                                $jwks = $result->json;
-                            }
-                        }
-                        else {
-                            $jwks = json_decode($redis->executeRaw(['GET', $cacheKey]), true);
-                            RedisLock::unlock($redis, $cacheKey);
-                        }
-    
-                        return ['code' => 200, 'decoded' => JWT::decode($jsonToken, JWK::parseKeySet($jwks))];
-                    }
-                    else {
-                        Log::error(__METHOD__ . ': Set cache lock failed');
+                    if (is_null($result) || (!$result->fromCache && $result->rawResponse->getStatusCode() !== 200)) {
                         return ['code' => 500, 'reason' => 'Internal error'];
                     }
+                    else {
+                        $jwks = $result->json;
+                    }
+
+                    return ['code' => 200, 'decoded' => JWT::decode($jsonToken, JWK::parseKeySet($jwks))];
                 }
             }
     

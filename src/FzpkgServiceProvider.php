@@ -58,6 +58,35 @@ final class FzpkgServiceProvider extends ServiceProvider
         $this->app->scoped(GlobalClientIdx::class, function() {
             return new GlobalClientIdx();
         });
+
+        $this->app->singleton('__fzKcClientCacheRedisConnection', function() {
+            $redis = new \Redis(config('fz.keycloak.client.cache.redis.init'));
+
+            $redis->setOption(\Redis::OPT_PREFIX, config('fz.keycloak.client.cache.redis.prefix'));	
+
+            foreach (config('fz.keycloak.client.cache.redis.options') as $optionName => $optionValue) {
+                $redis->setOption($optionName, $optionValue);
+            }
+
+            return $redis;
+        });
+
+        $this->app->singleton('__fzKcClientCacheMemcachedConnection', function() {
+            $memcached = new \Memcached(config('fz.keycloak.client.cache.memcached.init.persistent'));
+
+            $username = config('fz.keycloak.client.cache.memcached.init.auth')[0];
+            $password = config('fz.keycloak.client.cache.memcached.init.auth')[1];
+
+            $memcached->setOptions(config('fz.keycloak.client.cache.memcached.options'));
+
+            if (!empty($username) && !empty($password)) {
+                $memcached->setSaslAuthData($username, $password);
+            }
+            
+            $memcached->addServers(config('fz.keycloak.client.cache.memcached.servers'));
+
+            return $memcached;
+        });
     }
 
     public function boot(): void
@@ -77,11 +106,11 @@ final class FzpkgServiceProvider extends ServiceProvider
         }
 
         /*Auth::provider('KcTokenProvider',function ($app,array $config) { 
-            return new KcTokenProvider(new Client());
+            return new KcTokenProvider(Client::create());
         });*/
 
         Auth::extend('KcGuard', function ($app, $name, array $config) {
-            return new KcGuard(new Client());
+            return new KcGuard(Client::create());
         });
 
         Authenticate::redirectUsing(function($request) {

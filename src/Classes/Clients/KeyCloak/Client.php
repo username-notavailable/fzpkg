@@ -5,26 +5,23 @@ declare(strict_types=1);
 namespace Fuzzy\Fzpkg\Classes\Clients\KeyCloak;
 
 use GuzzleHttp\Client as GuzzleClient;
-//use GuzzleHttp\RequestOptions;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Redis;
 use GuzzleHttp\Exception\BadResponseException;
 use GuzzleHttp\Exception\ConnectException;
 use Firebase\JWT\JWT;
-use Fuzzy\Fzpkg\Classes\Utils\Redis\RedisLock;
+use Fuzzy\Fzpkg\Classes\Clients\KeyCloak\Classes\ClientCache\CacheInterface;
 use Fuzzy\Fzpkg\Classes\Clients\KeyCloak\Classes\{GuzzleClientHandlers, GuzzleClientHandler, GlobalClientIdx, RequestResult};
 use Nyholm\Psr7\Response;
-use Illuminate\Redis\Connections\Connection;
+use Fuzzy\Fzpkg\Classes\Clients\KeyCloak\Classes\ClientCache\{RedisCache, MemcachedCache};
 use Illuminate\Support\Facades\App;
-use Fuzzy\Fzpkg\Classes\Utils\TestLog;
 use Illuminate\Http\Request;
 
 class Client
 {
     protected $httpClient;
     protected $requestCountMax;
-    protected $requestDelayValue;
-    protected $redis;
+    protected $requestsMsDelayValue;
+    protected $cache;
 
     private $openIdConfigurations;
 
@@ -46,12 +43,12 @@ class Client
     public $guzzleHandlerName;
     public $guzzleHandlerClass;
 
-    public function __construct(?string $keycloakClientIdx = null)
+    public function __construct(CacheInterface $cache, ?string $keycloakClientIdx = null)
     {
         $this->httpClient = new GuzzleClient();
         $this->requestCountMax = 1;
-        $this->requestDelayValue = 1000;
-        $this->redis = Redis::connection();
+        $this->requestsMsDelayValue = 1000;
+        $this->cache = $cache;
 
         $this->openIdConfigurations = [];
 
@@ -79,6 +76,21 @@ class Client
 
         if (!$this->setKeycloakClientIdxData($keycloakClientIdx)) {
             throw new \Exception(__METHOD__ . ': Selected clientIdx not exists ("' . $keycloakClientIdx . '"');
+        }
+    }
+
+    public static function create(?string $keycloakClientIdx = null, ?CacheInterface $cache = null)
+    {
+        if (is_null($cache)) {
+            if (config('fz..default.keycloak.clientCacheType') === 'redis') {
+                return new self(new RedisCache(), $keycloakClientIdx);
+            }
+            else {
+                return new self(new MemcachedCache(), $keycloakClientIdx);
+            }
+        }
+        else {
+            return new self($cache, $keycloakClientIdx);
         }
     }
 
@@ -222,9 +234,9 @@ class Client
         return null;
     }
 
-    public function getRedis() : Connection
+    public function getCacheInterface() : CacheInterface
     {
-        return $this->redis;
+        return $this->cache;
     }
 
     public function getOpenIdConfiguration(string $realm) : ?array
@@ -250,14 +262,14 @@ class Client
         else {
             $cacheKey = 'kc_' . strtolower($realm) . '_cert';
 
-            if($this->redis->executeRaw(['EXISTS', $cacheKey]) === 1) {
-                $data = $this->redis->executeRaw(['GET', $cacheKey]);
+            if($this->cache->EXISTS($cacheKey)) {
+                $data = $this->cache->GET($cacheKey);
 
                 if (!is_null($data)) {
                     return new RequestResult(true, null, json_decode($data, true));
                 }
                 else {
-                    Log::error(__METHOD__ . ': Read from redis "' . $cacheKey . '" failed');
+                    Log::error(__METHOD__ . ': Read from cache "' . $cacheKey . '" failed');
 
                     $response = $this->doHttp2Request('GET', $this->openIdConfigurations[$realm]['jwks_uri']);
 
@@ -270,7 +282,7 @@ class Client
                 $response = $this->doHttp2Request('GET', $this->openIdConfigurations[$realm]['jwks_uri']);
 
                 if ($response->getStatusCode() === 200) {
-                    $this->redis->executeRaw(['SET', $cacheKey, (string) $response->getBody(), 'EX', 36000]);
+                    $this->cache->SET($cacheKey, (string) $response->getBody(), 36000);
                     return new RequestResult(false, $response, json_decode((string) $response->getBody(), true));
                 }
             }
@@ -285,15 +297,15 @@ class Client
     {
         $cacheKey = 'kc_' . strtolower($realm) . '_openid_conf';
 
-        if($this->redis->executeRaw(['EXISTS', $cacheKey]) === 1) {
-            $data = $this->redis->executeRaw(['GET', $cacheKey]);
+        if($this->cache->EXISTS($cacheKey)) {
+            $data = $this->cache->GET($cacheKey);
 
             if (!is_null($data)) {
                 $this->openIdConfigurations[$realm] = json_decode($data, true);
                 return true;
             }
             else {
-                Log::error(__METHOD__ . ': Read from redis "' . $cacheKey . '" failed');
+                Log::error(__METHOD__ . ': Read from cache "' . $cacheKey . '" failed');
 
                 $response = $this->doHttp2Request('GET', $this->keycloakLoginHostname . '/realms/' . $realm . '/.well-known/openid-configuration');
 
@@ -307,7 +319,7 @@ class Client
             $response = $this->doHttp2Request('GET', $this->keycloakLoginHostname . '/realms/' . $realm . '/.well-known/openid-configuration');
 
             if ($response->getStatusCode() === 200) {
-                $this->redis->executeRaw(['SET', $cacheKey, (string) $response->getBody(), 'EX', 36000]);
+                $this->cache->SET($cacheKey, (string) $response->getBody(), 36000);
                 $this->openIdConfigurations[$realm] = json_decode((string) $response->getBody(), true);
                 return true;
             }
@@ -318,17 +330,17 @@ class Client
 
     public function readClientToken() : ?RequestResult
     {
-        $cacheKey = 'kc_' . strtolower($this->authRealm) . '_client_auth_token';
+        $cacheKey = 'kc_' . strtolower($this->authRealm . '_' . $this->authClientId) . '_client_auth';
         $lockCacheKeyToken = $cacheKey . '_token';
 
-        if (RedisLock::lock($this->redis, $lockCacheKeyToken)) {
+        if ($this->cache->LOCK($lockCacheKeyToken)) {
             $result = $this->loadClientJsonToken($cacheKey);
 
-            RedisLock::unlock($this->redis, $lockCacheKeyToken);
+            $this->cache->UNLOCK($lockCacheKeyToken);
             return $result;
         }
         else {
-            Log::error(__METHOD__ . ': RedisLock::lock() failed ("' . $cacheKey . '")');
+            Log::error(__METHOD__ . ': ClientCache::LOCK failed ("' . $cacheKey . '")');
             return null;
         }
     }
@@ -390,14 +402,14 @@ class Client
         }
     }
 
-    public function setRequestDelayValue(int $msDelayValue)
+    public function setRequestsDelayValue(int $msDelayValue)
     {
         if ($msDelayValue <= 0) {
             Log::error(__METHOD__ . ': msDelayValue must be greater than 0');
-            $this->requestDelayValue = 1000;
+            $this->requestsMsDelayValue = 1000;
         }
         else {
-            $this->requestDelayValue = $msDelayValue;
+            $this->requestsMsDelayValue = $msDelayValue;
         }
     }
 
@@ -431,7 +443,7 @@ class Client
                     throw $e;
                 }
                 else {
-                    usleep(($this->requestDelayValue * $requestCount) * 1000);
+                    usleep(($this->requestsMsDelayValue * $requestCount) * 1000);
                 }
             }
             catch (BadResponseException $e) {
@@ -449,7 +461,7 @@ class Client
                         $requestDone = true;
                     }
                     else {
-                        usleep(($this->requestDelayValue * $requestCount) * 1000);
+                        usleep(($this->requestsMsDelayValue * $requestCount) * 1000);
                     }
                 }
             }
@@ -462,7 +474,7 @@ class Client
                     throw $e;
                 }
                 else {
-                    usleep(($this->requestDelayValue * $requestCount) * 1000);
+                    usleep(($this->requestsMsDelayValue * $requestCount) * 1000);
                 }
             }
         } while(!$requestDone);
@@ -484,10 +496,10 @@ class Client
 
     public function doRequestWithClientToken(string $method, string $requestUrl, array $options = []) : \Psr\Http\Message\ResponseInterface
     {
-        $cacheKey = 'kc_' . strtolower($this->authRealm) . '_client_auth_token';
+        $cacheKey = 'kc_' . strtolower($this->authRealm . '_' . $this->authClientId) . '_client_auth';
         $lockCacheKeyToken = $cacheKey . '_token';
 
-        if (RedisLock::lock($this->redis, $lockCacheKeyToken)) {
+        if ($this->cache->LOCK($lockCacheKeyToken)) {
             $result = $this->loadClientJsonToken($cacheKey);
 
             if (!is_null($result)) {
@@ -501,8 +513,8 @@ class Client
                     else {
                         Log::error(__METHOD__ . ': Get token failed ("' . $requestUrl . '")');
 
-                        RedisLock::unlock($this->redis, $lockCacheKeyToken);
-                        TestLog::log(__METHOD__ . ': Return rawResponse "' . $cacheKey . '"');
+                        $this->cache->UNLOCK($lockCacheKeyToken);
+                        Log::debug(__METHOD__ . ': Return rawResponse "' . $cacheKey . '"');
                         return $result->rawResponse;
                     }
                 }
@@ -510,19 +522,19 @@ class Client
             else {
                 Log::error(__METHOD__ . ': Call loadClientJsonToken() failed ("' . $requestUrl . '")');
 
-                RedisLock::unlock($this->redis, $lockCacheKeyToken);
+                $this->cache->UNLOCK($lockCacheKeyToken);
                 return new Response(511, [], 'Call loadClientJsonToken() failed ("' . $requestUrl . '")');
             }
         }
         else {
-            Log::error(__METHOD__ . ': RedisLock::lock() failed for loadClientJsonToken() ("' . $requestUrl . '")');
-            return new Response(511, [], 'RedisLock::lock() failed for loadClientJsonToken() ("' . $requestUrl . '")');
+            Log::error(__METHOD__ . ': ClientCache::LOCK failed for loadClientJsonToken() ("' . $requestUrl . '")');
+            return new Response(511, [], 'ClientCache::LOCK failed for loadClientJsonToken() ("' . $requestUrl . '")');
         }
 
         if ($jsonToken['token_type'] !== 'Bearer') {
             Log::error(__METHOD__ . ': Unsupported token type "' . $jsonToken['token_type']. '" (requested Bearer - "' . $requestUrl . '")');
 
-            RedisLock::unlock($this->redis, $lockCacheKeyToken);
+            $this->cache->UNLOCK($lockCacheKeyToken);
             return new Response(511, [], 'Unsupported token type "' . $jsonToken['token_type']. '" (requested Bearer - "' . $requestUrl . '")');
         }
         else {
@@ -530,18 +542,18 @@ class Client
 
             $rTime = $decoded['exp'] - time();
 
-            TestLog::log(__METHOD__ . ': rTime = "' . $rTime . '" (before request)');
+            Log::debug(__METHOD__ . ': rTime = "' . $rTime . '" (before request)');
 
             if ($rTime <= 0) { //Scaduto
-                TestLog::log(__METHOD__ . ': Token expired (before request)');
+                Log::debug(__METHOD__ . ': Token expired (before request)');
 
                 do
                 {
                     $done = true;
 
-                    if($this->redis->executeRaw(['EXISTS', $cacheKey]) === 1) {
-                        TestLog::log(__METHOD__ . ': Key cache entry exists for key "' . $cacheKey . '" (before request)');
-                        $done = $this->redis->executeRaw(['DEL', $cacheKey]) === 1;
+                    if($this->cache->EXISTS($cacheKey)) {
+                        Log::debug(__METHOD__ . ': Key cache entry exists for key "' . $cacheKey . '" (before request)');
+                        $done = $this->cache->DEL($cacheKey);
                     }
 
                     if (!$done) {
@@ -551,14 +563,14 @@ class Client
                 } while (!$done);
 
                 if ($done) {
-                    TestLog::log(__METHOD__ . ': DEL done for key "' . $cacheKey . '"');
+                    Log::debug(__METHOD__ . ': DEL done for key "' . $cacheKey . '"');
                 }
                 else {
-                    TestLog::log(__METHOD__ . ': DEL failed for key "' . $cacheKey . '"');
+                    Log::debug(__METHOD__ . ': DEL failed for key "' . $cacheKey . '"');
                 }
                 
                 if (array_key_exists('refresh_token', $jsonToken)) {
-                    TestLog::log(__METHOD__ . ': Try refresh_token for key "' . $cacheKey . '" (before_request)');
+                    Log::debug(__METHOD__ . ': Try refresh_token for key "' . $cacheKey . '" (before_request)');
 
                     $result = $this->getRefreshToken($cacheKey, $jsonToken);
 
@@ -573,8 +585,8 @@ class Client
                             else {
                                 Log::error(__METHOD__ . ': Token expired renew failed (before request - "' . $requestUrl . '")');
 
-                                RedisLock::unlock($this->redis, $lockCacheKeyToken);
-                                TestLog::log(__METHOD__ . ': Return rawResponse "' . $cacheKey . '"');
+                                $this->cache->UNLOCK($lockCacheKeyToken);
+                                Log::debug(__METHOD__ . ': Return rawResponse "' . $cacheKey . '"');
                                 return $result->rawResponse;
                             }
                         }
@@ -582,21 +594,21 @@ class Client
                     else {
                         Log::error(__METHOD__ . ': Call getRefreshToken() failed (before request - "' . $requestUrl . '")');
 
-                        RedisLock::unlock($this->redis, $lockCacheKeyToken);
+                        $this->cache->UNLOCK($lockCacheKeyToken);
                         return new Response(511, [], 'Call getRefreshToken() failed (before request - "' . $requestUrl . '")');
                     }
                     
-                    RedisLock::unlock($this->redis, $lockCacheKeyToken);
+                    $this->cache->UNLOCK($lockCacheKeyToken);
                     $tokenIsLocked = false;
                 }
                 else {
-                    RedisLock::unlock($this->redis, $lockCacheKeyToken);
-                    TestLog::log(__METHOD__ . ': No "refresh_token" into JWT token (before request - "' . $requestUrl . '")', $jsonToken);
+                    $this->cache->UNLOCK($lockCacheKeyToken);
+                    Log::debug(__METHOD__ . ': No "refresh_token" into JWT token (before request - "' . $requestUrl . '")', $jsonToken);
                     return $this->doRequestWithClientToken($method, $requestUrl, $options);
                 }
             }
             else if ($rTime >= 15) {
-                RedisLock::unlock($this->redis, $lockCacheKeyToken);
+                $this->cache->UNLOCK($lockCacheKeyToken);
                 $tokenIsLocked = false;
             }
             else {
@@ -605,23 +617,23 @@ class Client
 
 	        $decoded = self::decodeAccessTokenPayload($jsonToken['access_token']);
 
-            TestLog::log(__METHOD__ . ': AccessToken utilizzato per la richiesta (time corrente ' . time() . ')', $decoded);
+            Log::debug(__METHOD__ . ': AccessToken utilizzato per la richiesta (time corrente ' . time() . ')', $decoded);
 
             $response = $this->doRequestWithAccessToken($jsonToken['access_token'], $method, $requestUrl, $options);
 
             if ($response->getStatusCode() === 403) {
-                TestLog::log(__METHOD__ . ': Token expired (after request)');
+                Log::debug(__METHOD__ . ': Token expired (after request)');
 
                 if ($tokenIsLocked) {
-                    TestLog::log(__METHOD__ . ': Token is locked (after request)');
+                    Log::debug(__METHOD__ . ': Token is locked (after request)');
 
                     do
                     {
                         $done = true;
 
-                        if($this->redis->executeRaw(['EXISTS', $cacheKey]) === 1) {
-                            TestLog::log(__METHOD__ . ': Key cache entry exists for key "' . $cacheKey . '" (after request)');
-                            $done = $this->redis->executeRaw(['DEL', $cacheKey]) === 1;
+                        if($this->cache->EXISTS($cacheKey)) {
+                            Log::debug(__METHOD__ . ': Key cache entry exists for key "' . $cacheKey . '" (after request)');
+                            $done = $this->cache->DEL($cacheKey);
                         }
 
                         if (!$done) {
@@ -631,37 +643,37 @@ class Client
                     } while (!$done);
 
                     if ($done) {
-                        TestLog::log(__METHOD__ . ': DEL done for key "' . $cacheKey . '"');
+                        Log::debug(__METHOD__ . ': DEL done for key "' . $cacheKey . '"');
                     }
                     else {
-                        TestLog::log(__METHOD__ . ': DEL failed for key "' . $cacheKey . '"');
+                        Log::debug(__METHOD__ . ': DEL failed for key "' . $cacheKey . '"');
                     }
                 }
                 else {
-                    TestLog::log(__METHOD__ . ': Token is not locked (after request)');
+                    Log::debug(__METHOD__ . ': Token is not locked (after request)');
                 }
 
                 if (array_key_exists('refresh_token', $jsonToken)) {
-                    TestLog::log(__METHOD__ . ': Try refresh_token for key "' . $cacheKey . '" (after request)');
+                    Log::debug(__METHOD__ . ': Try refresh_token for key "' . $cacheKey . '" (after request)');
 
                     if ($tokenIsLocked) {
                         $result = $this->getRefreshToken($cacheKey, $jsonToken);
 
                         if (!is_null($result)) {
                             if ($result->fromCache) {
-                                RedisLock::unlock($this->redis, $lockCacheKeyToken);
+                                $this->cache->UNLOCK($lockCacheKeyToken);
                                 return $this->doRequestWithClientToken($method, $requestUrl, $options);
                             }
                             else {
                                 if ($result->rawResponse->getStatusCode() === 200) {
-                                    RedisLock::unlock($this->redis, $lockCacheKeyToken);
+                                    $this->cache->UNLOCK($lockCacheKeyToken);
                                     return $this->doRequestWithClientToken($method, $requestUrl, $options);
                                 }
                                 else {
                                     Log::error(__METHOD__ . ': Token expired renew failed (after request - "' . $requestUrl . '")');
 
-                                    RedisLock::unlock($this->redis, $lockCacheKeyToken);
-                                    TestLog::log(__METHOD__ . ': Return rawResponse "' . $cacheKey . '"');
+                                    $this->cache->UNLOCK($lockCacheKeyToken);
+                                    Log::debug(__METHOD__ . ': Return rawResponse "' . $cacheKey . '"');
                                     return $result->rawResponse;
                                 }
                             }
@@ -669,32 +681,32 @@ class Client
                         else {
                             Log::error(__METHOD__ . ': Call getRefreshToken() failed (after request - "' . $requestUrl . '")');
 
-                            RedisLock::unlock($this->redis, $lockCacheKeyToken);
+                            $this->cache->UNLOCK($lockCacheKeyToken);
                         }
                     }
                     else {
                         $lockCacheKeyRefresh = $cacheKey . '_refresh';
 
-                        TestLog::log(__METHOD__ . ': Try lock before call getRefreshToken() (token is unlocked)');
+                        Log::debug(__METHOD__ . ': Try lock before call getRefreshToken() (token is unlocked)');
 
-                        if (RedisLock::lock($this->redis, $lockCacheKeyRefresh)) {
+                        if ($this->cache->LOCK($lockCacheKeyRefresh)) {
                             $result = $this->getRefreshToken($cacheKey, $jsonToken);
 
                             if (!is_null($result)) {
                                 if ($result->fromCache) {
-                                    RedisLock::unlock($this->redis, $lockCacheKeyRefresh);
+                                    $this->cache->UNLOCK($lockCacheKeyRefresh);
                                     return $this->doRequestWithClientToken($method, $requestUrl, $options);
                                 }
                                 else {
                                     if ($result->rawResponse->getStatusCode() === 200) {
-                                        RedisLock::unlock($this->redis, $lockCacheKeyRefresh);
+                                        $this->cache->UNLOCK($lockCacheKeyRefresh);
                                         return $this->doRequestWithClientToken($method, $requestUrl, $options);
                                     }
                                     else {
                                         Log::error(__METHOD__ . ': Token expired renew failed (after request - "' . $requestUrl . '")');
 
-                                        RedisLock::unlock($this->redis, $lockCacheKeyRefresh);
-                                        TestLog::log(__METHOD__ . ': Return rawResponse "' . $cacheKey . '"');
+                                        $this->cache->UNLOCK($lockCacheKeyRefresh);
+                                        Log::debug(__METHOD__ . ': Return rawResponse "' . $cacheKey . '"');
                                         return $result->rawResponse;
                                     }
                                 }
@@ -702,21 +714,21 @@ class Client
                             else {
                                 Log::error(__METHOD__ . ': Call getRefreshToken() failed (after request - "' . $requestUrl . '")');
 
-                                RedisLock::unlock($this->redis, $lockCacheKeyRefresh);
+                                $this->cache->UNLOCK($lockCacheKeyRefresh);
                             }
                         }
                         else {
-                            Log::error(__METHOD__ . ': RedisLock::lock() failed for getRefreshToken() ("' . $requestUrl . '")');
+                            Log::error(__METHOD__ . ': ClientCache::LOCK failed for getRefreshToken() ("' . $requestUrl . '")');
                         }
                     }
                 }
                 else {
-                    TestLog::log(__METHOD__ . ': No "refresh_token" into JWT token (after request - "' . $requestUrl . '")', $jsonToken);
+                    Log::debug(__METHOD__ . ': No "refresh_token" into JWT token (after request - "' . $requestUrl . '")', $jsonToken);
                 }
             }
             
             if ($tokenIsLocked) {
-                RedisLock::unlock($this->redis, $lockCacheKeyToken);
+                $this->cache->UNLOCK($lockCacheKeyToken);
             }
 
             return $response;
@@ -734,29 +746,29 @@ class Client
 
             if ($response->getStatusCode() === 403 && $this->userTokenIsExpired($jsonToken)) {
                 if (array_key_exists('refresh_token', $jsonToken)) {
-                    $cacheKey = 'kc_' . hash('md5', $jsonToken['access_token']) . '_user_auth_token';
+                    $cacheKey = 'kc_' . hash('md5', $jsonToken['access_token']) . '_user_auth';
                     $lockCacheKeyRefresh = $cacheKey . '_refresh';
     
-                    if (RedisLock::lock($this->redis, $lockCacheKeyRefresh)) {
+                    if ($this->cache->LOCK($lockCacheKeyRefresh)) {
                         $result = $this->refreshUserToken($jsonToken);
     
                         if (!is_null($result)) {
                             if ($result->fromCache) {
                                 $jsonToken = $result->json;
-                                RedisLock::unlock($this->redis, $lockCacheKeyRefresh);
+                                $this->cache->UNLOCK($lockCacheKeyRefresh);
                                 $response = $this->doRequestWithUserToken($jsonToken, $method, $requestUrl, $options);
                             }
                             else {
                                 if ($result->rawResponse->getStatusCode() === 200) {
                                     $jsonToken = $result->json;
-                                    RedisLock::unlock($this->redis, $lockCacheKeyRefresh);
+                                    $this->cache->UNLOCK($lockCacheKeyRefresh);
                                     $response = $this->doRequestWithUserToken($jsonToken, $method, $requestUrl, $options);
                                 }
                                 else {
                                     Log::error(__METHOD__ . ': Token expired renew failed (after request - "' . $requestUrl . '")');
 
-                                    RedisLock::unlock($this->redis, $lockCacheKeyRefresh);
-                                    TestLog::log(__METHOD__ . ': Return rawResponse "' . $cacheKey . '"');
+                                    $this->cache->UNLOCK($lockCacheKeyRefresh);
+                                    Log::debug(__METHOD__ . ': Return rawResponse "' . $cacheKey . '"');
                                     return $result->rawResponse;
                                 }
                             }
@@ -764,15 +776,15 @@ class Client
                         else {
                             Log::error(__METHOD__ . ': Call getRefreshToken() failed ("' . $requestUrl . '")');
     
-                            RedisLock::unlock($this->redis, $lockCacheKeyRefresh);
+                            $this->cache->UNLOCK($lockCacheKeyRefresh);
                         }
                     }
                     else {
-                        Log::error(__METHOD__ . ': RedisLock::lock() failed for getRefreshToken() ("' . $requestUrl . '")');
+                        Log::error(__METHOD__ . ': ClientCache::LOCK failed for getRefreshToken() ("' . $requestUrl . '")');
                     }
                 }
                 else {
-                    TestLog::log(__METHOD__ . ': No "refresh_token" into JWT token ("' . $requestUrl . '")', $jsonToken);
+                    Log::debug(__METHOD__ . ': No "refresh_token" into JWT token ("' . $requestUrl . '")', $jsonToken);
                 }
             }
 
@@ -1165,55 +1177,57 @@ class Client
         }
     }
 
+    // ---
+
     private function loadClientJsonToken(string $cacheKey) : ?RequestResult
     {
-        TestLog::log(__METHOD__ . ': Requested token "' . $cacheKey . '"');
+        Log::debug(__METHOD__ . ': Requested token "' . $cacheKey . '"');
 
-        if($this->redis->executeRaw(['EXISTS', $cacheKey]) === 1) {
-            TestLog::log(__METHOD__ . ': Token exists into cache for key "' . $cacheKey . '"');
-            $data = $this->redis->executeRaw(['GET', $cacheKey]);
+        if($this->cache->EXISTS($cacheKey)) {
+            Log::debug(__METHOD__ . ': Token exists into cache with key "' . $cacheKey . '"');
+            $data = $this->cache->GET($cacheKey);
 
             if (!is_null($data)) {
-                TestLog::log(__METHOD__ . ': GET done from cache for key "' . $cacheKey . '"');
+                Log::debug(__METHOD__ . ': GET done from cache for key "' . $cacheKey . '"');
                 return new RequestResult(true, null, json_decode($data, true));
             }
             else {
-                TestLog::log(__METHOD__ . ': GET fail from cache for key "' . $cacheKey . '"');
-                Log::error(__METHOD__ . ': Read "' . $cacheKey . '" from redis failed');
+                Log::debug(__METHOD__ . ': GET fail from cache for key "' . $cacheKey . '"');
+                Log::error(__METHOD__ . ': Read "' . $cacheKey . '" from cache failed');
             }
         }
         else {
-            TestLog::log(__METHOD__ . ': Token not exists into cache for key "' . $cacheKey . '" do request...');
+            Log::debug(__METHOD__ . ': Token not exists into cache with key "' . $cacheKey . '"');
         }
 
         $authResponse = $this->doClientAuth();
 
         if (!is_null($authResponse) && $authResponse->rawResponse->getStatusCode() === 200) {
-            TestLog::log(__METHOD__ . ': Save new token into cache for key "' . $cacheKey . '"');
+            Log::debug(__METHOD__ . ': Save new token into cache with key "' . $cacheKey . '"');
 
             do
             {
-                $result = $this->redis->executeRaw(['SET', $cacheKey, json_encode($authResponse->json, JSON_FORCE_OBJECT | JSON_THROW_ON_ERROR), 'EX', $authResponse->json['expires_in']]);
+                $done = $this->cache->SET($cacheKey, json_encode($authResponse->json, JSON_FORCE_OBJECT | JSON_THROW_ON_ERROR), $authResponse->json['expires_in']);
 
-                if ($result !== 'OK') {
+                if (!$done) {
                     usleep(100000);
                 }
 
-            } while ($result !== 'OK');
+            } while (!$done);
 
-            if ($result === 'OK') {
-                TestLog::log(__METHOD__ . ': SET done from cache for key "' . $cacheKey . '"');
+            if ($done) {
+                Log::debug(__METHOD__ . ': SET done from cache for key "' . $cacheKey . '"');
             }
             else {
-                TestLog::log(__METHOD__ . ': SET done from cache for key "' . $cacheKey . '"');
+                Log::debug(__METHOD__ . ': SET done from cache for key "' . $cacheKey . '"');
             }
         }
         else {
             if (is_null($authResponse)) {
-                TestLog::log(__METHOD__ . ': Auth is null, new token NOT saved into cache for key "' . $cacheKey . '"');
+                Log::debug(__METHOD__ . ': Auth is null, new token NOT saved into cache with key "' . $cacheKey . '"');
             }
             else {
-                TestLog::log(__METHOD__ . ': Auth response != 200, new token NOT saved into cache for key "' . $cacheKey . '"', ['statusCode' => $authResponse->rawResponse->getStatusCode()]);
+                Log::debug(__METHOD__ . ': Auth response != 200, new token NOT saved into cache with key "' . $cacheKey . '"', ['statusCode' => $authResponse->rawResponse->getStatusCode()]);
             }
         }
 
@@ -1222,14 +1236,14 @@ class Client
 
     private function getRefreshToken(?string $cacheKey, array $oldJsonToken) : ?RequestResult
     {
-        TestLog::log(__METHOD__ . ': Requested refresh token "' . $cacheKey . '"', self::decodeAccessToken($oldJsonToken['access_token']));
+        Log::debug(__METHOD__ . ': Requested refresh token "' . $cacheKey . '"', self::decodeAccessToken($oldJsonToken['access_token']));
 
         $decoded = self::decodeAccessTokenPayload($oldJsonToken['access_token']);
 
         $rTime = $decoded['exp'] - time();
 
         if ($rTime > 0) { //Non Scaduto
-            TestLog::log(__METHOD__ . ': Requested refersh_token but old token is not expired "' . $cacheKey . '"');
+            Log::debug(__METHOD__ . ': Requested refersh_token but old token is not expired "' . $cacheKey . '"');
             return new RequestResult(true, null, $oldJsonToken);
         }
 
@@ -1237,35 +1251,35 @@ class Client
 
         if (!is_null($authResponse) && $authResponse->rawResponse->getStatusCode() === 200) {
             if (!is_null($cacheKey)) {
-                TestLog::log(__METHOD__ . ': Save fresh token into cache for key "' . $cacheKey . '"');
+                Log::debug(__METHOD__ . ': Save fresh token into cache for key "' . $cacheKey . '"');
 
                 do
                 {
-                    $result = $this->redis->executeRaw(['SET', $cacheKey, json_encode($authResponse->json, JSON_FORCE_OBJECT | JSON_THROW_ON_ERROR), 'EX', $authResponse->json['expires_in']]);
+                    $done = $this->cache->SET($cacheKey, json_encode($authResponse->json, JSON_FORCE_OBJECT | JSON_THROW_ON_ERROR), $authResponse->json['expires_in']);
 
-                    if ($result !== 'OK') {
+                    if (!$done) {
                         usleep(100000);
                     }
 
-                } while ($result !== 'OK');
+                } while (!$done);
 
-                if ($result === 'OK') {
-                    TestLog::log(__METHOD__ . ': SET done from cache for key "' . $cacheKey . '"');
+                if ($done) {
+                    Log::debug(__METHOD__ . ': SET done from cache for key "' . $cacheKey . '"');
                 }
                 else {
-                    TestLog::log(__METHOD__ . ': SET done from cache for key "' . $cacheKey . '"');
+                    Log::debug(__METHOD__ . ': SET done from cache for key "' . $cacheKey . '"');
                 }
             }
             else {
-                TestLog::log(__METHOD__ . ': CacheKey is null, cache not required');
+                Log::debug(__METHOD__ . ': CacheKey is null, cache not required');
             }
         }
         else {
             if (is_null($authResponse)) {
-                TestLog::log(__METHOD__ . ': Auth is null, new token NOT saved into cache for key "' . $cacheKey . '"');
+                Log::debug(__METHOD__ . ': Auth is null, new token NOT saved into cache for key "' . $cacheKey . '"');
             }
             else {
-                TestLog::log(__METHOD__ . ': Auth response != 200, new token NOT saved into cache for key "' . $cacheKey . '"', ['statusCode' => $authResponse->rawResponse->getStatusCode()]);
+                Log::debug(__METHOD__ . ': Auth response != 200, new token NOT saved into cache for key "' . $cacheKey . '"', ['statusCode' => $authResponse->rawResponse->getStatusCode()]);
             }
         }
 
