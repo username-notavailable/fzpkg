@@ -75,7 +75,7 @@ final class FzpkgServiceProvider extends ServiceProvider
             $memcached = new \Memcached(config('fz.keycloak.client.cache.memcached.init.persistent'));
 
             foreach (config('fz.keycloak.client.cache.memcached.options') as $optionName => $optionValue) {
-                $memcached->setOptions(constant('\Memcached::'. $optionName), $optionValue);
+                $memcached->setOption(constant('\Memcached::'. $optionName), $optionValue);
             }
 
             $username = config('fz.keycloak.client.cache.memcached.init.auth')[0];
