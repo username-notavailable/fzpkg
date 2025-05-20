@@ -74,10 +74,12 @@ final class FzpkgServiceProvider extends ServiceProvider
         $this->app->singleton('__fzKcClientCacheMemcachedConnection', function() {
             $memcached = new \Memcached(config('fz.keycloak.client.cache.memcached.init.persistent'));
 
+            foreach (config('fz.keycloak.client.cache.memcached.options') as $optionName => $optionValue) {
+                $memcached->setOptions(constant('\Memcached::'. $optionName), $optionValue);
+            }
+
             $username = config('fz.keycloak.client.cache.memcached.init.auth')[0];
             $password = config('fz.keycloak.client.cache.memcached.init.auth')[1];
-
-            $memcached->setOptions(config('fz.keycloak.client.cache.memcached.options'));
 
             if (!empty($username) && !empty($password)) {
                 $memcached->setSaslAuthData($username, $password);
