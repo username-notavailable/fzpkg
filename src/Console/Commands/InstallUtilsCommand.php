@@ -26,6 +26,8 @@ final class InstallUtilsCommand extends BaseCommand
         $filesystem->ensureDirectoryExists(resource_path('sass'));
         $filesystem->copyDirectory(__DIR__.'/../../../data/utils/sass', resource_path('sass'));
 
+        $filesystem->copy(__DIR__.'/../../../data/utils/vite-theme.config.js', base_path('vite-theme.config.js'));
+
         /* --- */
 
         $this->updateNodePackages(function ($packages) {
