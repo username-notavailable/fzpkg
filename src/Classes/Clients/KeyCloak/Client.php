@@ -6,8 +6,7 @@ namespace Fuzzy\Fzpkg\Classes\Clients\KeyCloak;
 
 use GuzzleHttp\Client as GuzzleClient;
 use Illuminate\Support\Facades\Log;
-use GuzzleHttp\Exception\BadResponseException;
-use GuzzleHttp\Exception\ConnectException;
+use GuzzleHttp\Exception\{BadResponseException, ConnectException, ClientException};
 use Firebase\JWT\JWT;
 use Fuzzy\Fzpkg\Classes\Clients\KeyCloak\Classes\ClientCache\CacheInterface;
 use Fuzzy\Fzpkg\Classes\Clients\KeyCloak\Classes\{GuzzleClientHandlers, GuzzleClientHandler, GlobalClientIdx, RequestResult};
@@ -432,10 +431,10 @@ class Client
                 $response = $this->httpClient->request($method, $requestUrl, $options); 
 
                 $requestDone = true;
-                Log::debug(__METHOD__ . ': HTTP Request OK: ' . $method . ' "' . $requestUrl . '" Status code = ' . $response->getStatusCode() . ' -- Status message = ' . $response->getReasonPhrase(), $options);
+                Log::debug(__METHOD__ . ': HTTP Request OK: ' . $method . ' "' . $requestUrl . '" Status code = ' . $response->getStatusCode() . ' -- Status message = ' . $response->getReasonPhrase());
             } 
             catch (ConnectException $e) {
-                Log::error(__METHOD__ . ': HTTP Request FAILED: ' . $method . ' "' . $requestUrl . '" (ConnectException)', ['options' => $options, 'exception' => $e]);
+                Log::error(__METHOD__ . ': HTTP Request FAILED: ' . $method . ' "' . $requestUrl . '" (ConnectException)');
 
                 $requestCount++;
 
@@ -449,7 +448,7 @@ class Client
             catch (BadResponseException $e) {
                 $response = $e->getResponse();
 
-                Log::error(__METHOD__ . ': HTTP Request FAILED: ' . $method . ' "' . $requestUrl . '" Status code = ' . $response->getStatusCode() . ' -- Status message = ' . $response->getReasonPhrase() . ' -- Body = ' . $response->getBody(), ['options' => $options, 'exception' => $e]);
+                Log::error(__METHOD__ . ': HTTP Request FAILED: ' . $method . ' "' . $requestUrl . '" Status code = ' . $response->getStatusCode() . ' -- Status message = ' . $response->getReasonPhrase() . ' -- Body = ' . $response->getBody());
 
                 if ($response->getStatusCode() >= 400 && $response->getStatusCode() <= 499) {
                     $requestDone = true;
@@ -466,7 +465,7 @@ class Client
                 }
             }
             catch (\Throwable $e) {
-                Log::error(__METHOD__ . ': HTTP Request FAILED: ' . $method . ' "' . $requestUrl . '" (Exception)', ['options' => $options, 'exception' => $e]);
+                Log::error(__METHOD__ . ': HTTP Request FAILED: ' . $method . ' "' . $requestUrl . '" (Exception)');
 
                 $requestCount++;
 

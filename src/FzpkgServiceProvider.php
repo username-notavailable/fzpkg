@@ -15,13 +15,13 @@ use Fuzzy\Fzpkg\Console\Commands\InstallStubsCommand;
 use Fuzzy\Fzpkg\Console\Commands\InstallUtilsCommand;
 //use Fuzzy\Fzpkg\Console\Commands\MakeLivewireFormCommand;
 //use Fuzzy\Fzpkg\Console\Commands\MakeSweetApiEndpointsCommand;
-use Fuzzy\Fzpkg\Console\Commands\MakeThemeComponentCommand;
-use Fuzzy\Fzpkg\Console\Commands\MakeThemeViewCommand;
+//use Fuzzy\Fzpkg\Console\Commands\MakeThemeComponentCommand;
+//use Fuzzy\Fzpkg\Console\Commands\MakeThemeViewCommand;
 //use Fuzzy\Fzpkg\Console\Commands\MakeVoltComponentCommand;
 //use Fuzzy\Fzpkg\Console\Commands\ReloadSweetApiCommand;
 use Fuzzy\Fzpkg\Console\Commands\RunScrapersCommand;
 //use Fuzzy\Fzpkg\Console\Commands\RunSweetApiCommand;
-use Fuzzy\Fzpkg\Console\Commands\RunThemeCmdCommand;
+//use Fuzzy\Fzpkg\Console\Commands\RunThemeCmdCommand;
 //use Fuzzy\Fzpkg\Console\Commands\StatusSweetApiCommand; 
 //use Fuzzy\Fzpkg\Console\Commands\StopSweetApiCommand;
 use Illuminate\Support\Facades\DB;
@@ -135,11 +135,11 @@ final class FzpkgServiceProvider extends ServiceProvider
                 InstallUtilsCommand::class,
                 //MakeLivewireFormCommand::class,
                 //MakeSweetApiEndpointsCommand::class,
-                MakeThemeComponentCommand::class,
-                MakeThemeViewCommand::class,
+                //MakeThemeComponentCommand::class,
+                //MakeThemeViewCommand::class,
                 //MakeVoltComponentCommand::class,
                 RunScrapersCommand::class,
-                RunThemeCmdCommand::class
+                //RunThemeCmdCommand::class
             ];
             
             /*if (\Composer\InstalledVersions::isInstalled('laravel/octane')) {

@@ -26,35 +26,6 @@ final class InstallUtilsCommand extends BaseCommand
         $filesystem->ensureDirectoryExists(resource_path('sass'));
         $filesystem->copyDirectory(__DIR__.'/../../../data/utils/sass', resource_path('sass'));
 
-        //$filesystem->ensureDirectoryExists(resource_path('utils'));
-
-        $laravelBootstrapJsPath = resource_path('js/bootstrap.js');
-
-        if ($filesystem->exists($laravelBootstrapJsPath)) {
-            $filesystem->append($laravelBootstrapJsPath, "
-import.meta.glob([
-    '../assets/**',
-]);
-
-import utils from './utils';
-window.utils = utils;
-");
-        }
-
-        $viteFilePath = base_path('vite.config.js');
-
-        if ($filesystem->exists($viteFilePath)) {
-            $data = $filesystem->get($viteFilePath);
-
-            if (mb_stripos($data, 'resources/css/app.css') !== false) {
-                $data = preg_replace('@resources/css/app.css@', 'resources/sass/app.scss', $data);
-
-                if (!is_null($data)) {
-                    $filesystem->put($viteFilePath, $data);
-                }
-            }
-        }
-
         /* --- */
 
         $this->updateNodePackages(function ($packages) {
@@ -62,8 +33,6 @@ window.utils = utils;
                 'sass' => '^1.77.8'
             ] + $packages;
         }, true);
-
-        $this->runCommands(['npm install --include=dev', 'npm run build']);
 
         /* --- */
 
