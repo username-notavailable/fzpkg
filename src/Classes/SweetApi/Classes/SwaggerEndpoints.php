@@ -50,7 +50,7 @@ class SwaggerEndpoints
         {
             $schemes = [];
 
-            if ($urlParts['scheme'] === 'https') {
+            if (isset($urlParts['scheme']) && $urlParts['scheme'] === 'https') {
                 $schemes[] = 'https';
             }
 
@@ -119,7 +119,7 @@ class SwaggerEndpoints
                         }
 
                         if ($attributeInstance instanceof WithSecurityRequirement) {
-                            $security[] = new OpenApiSecurityRequirement($attributeInstance->schemaParams);
+                            $security[$attributeInstance->name] = new OpenApiSecurityRequirement($attributeInstance->schemaParams);
                         }
 
                         if ($attributeInstance instanceof WithHeader) {
@@ -229,7 +229,7 @@ class SwaggerEndpoints
                     'version' => config('fz.default.sweetapi.info.version', '1.0.0'),
                 ];
 
-                if (empty($servers)) {
+                if (!empty($urlParts)) {
                     if (!isset($urlParts['port'])) {
                         $port = '';
                     }
@@ -237,14 +237,20 @@ class SwaggerEndpoints
                         $port = ':' . $urlParts['port'];
                     }
 
-                    if (($urlParts['scheme'] === 'http' && $port === 80) ||($urlParts['scheme'] === 'https' && $port === 443)) {
+                    if (isset($urlParts['scheme']) && (($urlParts['scheme'] === 'http' && $port === 80) ||($urlParts['scheme'] === 'https' && $port === 443))) {
                         $port = '';
                     }
 
-                    $url = $urlParts['host'] . $port;
+                    if (!isset($urlParts['host'])) {
+                        throw new \InvalidArgumentException(__METHOD__ . ': "host" not defined into "base_uri"');
+                    }
+ 
+                    $url = $urlParts['scheme'] . '://' . $urlParts['host'] . $port;
 
-                    $servers[] = new OpenApiServer(['url' => $url]);
+                    $servers[] = new OpenApiServer(['url' => $url, 'description' => 'URL generated with "base_uri"']);
                 }
+
+                $servers[] = new OpenApiServer(['url' => '/', 'description' => 'Current server URL']);
 
                 $openapi = [
                     'openapi' => '3.0.2',

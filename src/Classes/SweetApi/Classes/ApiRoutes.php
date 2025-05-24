@@ -15,7 +15,6 @@ class ApiRoutes
 
         if (count($classes) > 0) {
             $controllersStructs = [];
-            $uses = [];
 
             foreach ($classes as $idx => $class) {
                 $className = basename($class, '.php');
@@ -117,16 +116,18 @@ class ApiRoutes
             $controllersStructs = array_reverse($controllersStructs);
             
             foreach ($controllersStructs as $idx => $data) {
-                file_put_contents($apiRoutesFilename, "use " . $data['use'] . ";\n", FILE_APPEND);
-            }
-
-            foreach ($uses as $use) {
-                file_put_contents($apiRoutesFilename, $use . "\n", FILE_APPEND);
+                if (!empty($data['methods'])) {
+                    file_put_contents($apiRoutesFilename, "use " . $data['use'] . ";\n", FILE_APPEND);
+                }
             }
 
             file_put_contents($apiRoutesFilename, "\n", FILE_APPEND);
 
             foreach ($controllersStructs as $idx => $controllerData) {
+                if (empty($controllerData['methods'])) {
+                    continue;
+                }
+
                 $item = '';
                 $tCount = 0;
 

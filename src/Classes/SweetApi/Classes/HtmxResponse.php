@@ -22,7 +22,7 @@ class HtmxResponse extends Response
      * 
      * @return HtmxResponse
      */
-    public static function page($content = null, $status = 200, array $headers = []) : self
+    public static function create($content = null, $status = 200, array $headers = []) : self
     {
         return new self($content, $status, $headers);
     }
