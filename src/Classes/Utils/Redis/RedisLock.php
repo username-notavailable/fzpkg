@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Fuzzy\Fzpkg\Classes\Utils\Redis;
 
 use Illuminate\Redis\Connections\Connection;
-use Fuzzy\Fzpkg\Classes\Utils\TestLog;
+use Illuminate\Support\Facades\Log;
 
 class RedisLock
 {
