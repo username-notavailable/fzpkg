@@ -34,10 +34,12 @@ trait AccessTokenRequestTrait
                 else {
                     $jsonToken = trim($parts[1]);
 
-                    $result = (Client::create())->loadRealmCert($client->authRealm);
+                    $kcClient = Client::create();
+
+                    $result = $kcClient->loadRealmCert($kcClient->authRealm);
     
                     if (is_null($result) || (!$result->fromCache && $result->rawResponse->getStatusCode() !== 200)) {
-                        return ['code' => 500, 'reason' => 'Internal error'];
+                        return ['code' => 500, 'reason' => 'Load realm certificate failed'];
                     }
                     else {
                         $jwks = $result->json;
@@ -74,7 +76,7 @@ trait AccessTokenRequestTrait
             return ['code' => 422, 'reason' => 'Provided JWT is malformed OR Provided JWT is missing an algorithm / using an unsupported algorithm OR provided JWT algorithm does not match provided key OR provided key ID in key/key-array is empty or invalid'];
         } catch(\Throwable $e) {
             Log::error(__METHOD__ . ': ' . $e->getMessage() . ' - FILE: ' . $e->getFile() . ' - LINE: ' . $e->getLine());
-            return ['code' => 500, 'reason' => 'Internal error'];
+            return ['code' => 500, 'reason' => 'Excetion error'];
         }
     }
 
