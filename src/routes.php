@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Filesystem\Filesystem;
 use Fuzzy\Fzpkg\Classes\Utils\Utils;
 use Fuzzy\Fzpkg\Classes\Clients\KeyCloak\Client;
+use Fuzzy\Fzpkg\Classes\SweetApi\Classes\HtmxRequest;
 
 Route::middleware(['web'])->group(function () {
     Route::get('/.well-known/js/translations.js', function (Request $request) {
@@ -35,13 +36,14 @@ Route::middleware(['web'])->group(function () {
             else {
                 $strings = file_get_contents($languageFilePath);
             }
+
+            return response('window.i18n = ' . trim($strings) . ';', 200)->header('content-type', 'text/javascript');
         }
         else {
             Log::debug(__METHOD__ . ': Language file "' . $languageFilePath . '" not found');
-            $strings = '{}';
         }
 
-        return response('window.i18n = ' . trim($strings) . ';', 200)->header('content-type', 'text/javascript');
+        return response('', 404);
     })->name('fz_locale_js_translations');
 
     Route::any('/.well-known/htmx/link', function (Request $request) {
@@ -52,41 +54,42 @@ Route::middleware(['web'])->group(function () {
 
         if ($validator->fails()) {
             Log::debug(__METHOD__ . ': validazione richiesta fallita', $validator->errors()->toArray());
-            return response('Validation failed', 422);
-        }
-
-        $files = new Filesystem();
-
-        if ($files->exists(app_path('View/Components/' . $request->__fz_c__ . 'Htmx.php'))) {
-            $object = new \ReflectionClass(Utils::makeNamespacePath('App', 'View', 'Components', $request->__fz_c__ . 'Htmx'));
-
-            $requestedMethodName = $request->__fz_cm__;
-            
-            foreach ($object->getMethods(\ReflectionProperty::IS_PUBLIC) as $method) {
-                if ($method->getName() === $requestedMethodName) {
-                    return $method->invoke($object->newInstance(), $request);
-                }
-            }
-
-            return response('Class method "' . $requestedMethodName . '" not found', 422);
-        }
-        else if ($files->exists(app_path('View/Components/' . $request->__fz_c__ . '.php'))) {
-            $object = new \ReflectionClass(Utils::makeNamespacePath('App', 'View', 'Components', $request->__fz_c__));
-
-            $requestedMethodName = $request->__fz_cm__ . 'Htmx';
-            
-            foreach ($object->getMethods(\ReflectionProperty::IS_PUBLIC) as $method) {
-                if ($method->getName() === $requestedMethodName) {
-                    return $method->invoke($object->newInstance(), $request);
-                }
-            }
-
-            return response('Class method "' . $requestedMethodName . '" not found', 422);
         }
         else {
-            Log::debug(__METHOD__ . ': Class "' . $request->__fz_c__ . '" not found');
-            return response('Class "' . $request->__fz_c__ . '" not found', 422);
+            $files = new Filesystem();
+
+            if ($files->exists(app_path('View/Components/' . $request->__fz_c__ . 'Htmx.php'))) {
+                $object = new \ReflectionClass(Utils::makeNamespacePath('App', 'View', 'Components', $request->__fz_c__ . 'Htmx'));
+
+                $requestedMethodName = $request->__fz_cm__;
+                
+                foreach ($object->getMethods(\ReflectionProperty::IS_PUBLIC) as $method) {
+                    if ($method->getName() === $requestedMethodName) {
+                        return $method->invoke($object->newInstance(), HtmxRequest::createFrom($request));
+                    }
+                }
+
+                Log::debug(__METHOD__ . ': Class method "' . $request->__fz_c__ . 'Htmx::' . $requestedMethodName . '()" not found');
+            }
+            else if ($files->exists(app_path('View/Components/' . $request->__fz_c__ . '.php'))) {
+                $object = new \ReflectionClass(Utils::makeNamespacePath('App', 'View', 'Components', $request->__fz_c__));
+
+                $requestedMethodName = $request->__fz_cm__ . 'Htmx';
+                
+                foreach ($object->getMethods(\ReflectionProperty::IS_PUBLIC) as $method) {
+                    if ($method->getName() === $requestedMethodName) {
+                        return $method->invoke($object->newInstance(), HtmxRequest::createFrom($request));
+                    }
+                }
+
+                Log::debug(__METHOD__ . ': Class method "' . $request->__fz_c__ . '::' . $requestedMethodName . '()" not found');
+            }
+            else {
+                Log::debug(__METHOD__ . ': Class "' . $request->__fz_c__ . '" not found');
+            }
         }
+
+        return response('', 422);
     })->name('fz_htmx_link');
 
     Route::get('/.well-known/auth/authorizazion-code/v1/callback', function (Request $request) {
@@ -177,7 +180,7 @@ Route::middleware(['web', 'api'])->group(function () {
             return response(file_get_contents($file), 200)->header('content-type', 'application/json');
         }
         else {
-            Log::debug(__METHOD__ . ': File "' . $file . '" not found');
+            Log::warning(__METHOD__ . ': File "' . $file . '" not found');
             return response('', 404);
         }
     });

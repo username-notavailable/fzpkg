@@ -7,13 +7,19 @@ namespace Fuzzy\Fzpkg\Classes\Clients\KeyCloak;
 use GuzzleHttp\Client as GuzzleClient;
 use Illuminate\Support\Facades\Log;
 use GuzzleHttp\Exception\{BadResponseException, ConnectException, ClientException};
-use Firebase\JWT\JWT;
 use Fuzzy\Fzpkg\Classes\Clients\KeyCloak\Classes\ClientCache\CacheInterface;
 use Fuzzy\Fzpkg\Classes\Clients\KeyCloak\Classes\{GuzzleClientHandlers, GuzzleClientHandler, GlobalClientIdx, RequestResult};
 use Nyholm\Psr7\Response;
 use Fuzzy\Fzpkg\Classes\Clients\KeyCloak\Classes\ClientCache\{RedisCache, MemcachedCache};
 use Illuminate\Support\Facades\App;
 use Illuminate\Http\Request;
+use Firebase\JWT\{JWT, JWK};
+use Firebase\JWT\SignatureInvalidException;
+use Firebase\JWT\BeforeValidException;
+use Firebase\JWT\ExpiredException;
+use DomainException;
+use InvalidArgumentException;
+use UnexpectedValueException;
 
 class Client
 {
@@ -292,42 +298,7 @@ class Client
         return null;
     }
 
-    protected function loadOpenIdConfiguration(string $realm) : bool
-    {
-        $cacheKey = 'kc_' . strtolower($realm) . '_openid_conf';
-
-        if($this->cache->EXISTS($cacheKey)) {
-            $data = $this->cache->GET($cacheKey);
-
-            if (!is_null($data)) {
-                $this->openIdConfigurations[$realm] = json_decode($data, true);
-                return true;
-            }
-            else {
-                Log::error(__METHOD__ . ': Read from cache "' . $cacheKey . '" failed');
-
-                $response = $this->doHttp2Request('GET', $this->keycloakLoginHostname . '/realms/' . $realm . '/.well-known/openid-configuration');
-
-                if ($response->getStatusCode() === 200) {
-                    $this->openIdConfigurations[$realm] = json_decode((string) $response->getBody(), true);
-                    return true;
-                }
-            }
-        }
-        else {
-            $response = $this->doHttp2Request('GET', $this->keycloakLoginHostname . '/realms/' . $realm . '/.well-known/openid-configuration');
-
-            if ($response->getStatusCode() === 200) {
-                $this->cache->SET($cacheKey, (string) $response->getBody(), 36000);
-                $this->openIdConfigurations[$realm] = json_decode((string) $response->getBody(), true);
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    public function readClientToken() : ?RequestResult
+    public function loadClientToken() : ?RequestResult
     {
         $cacheKey = 'kc_' . strtolower($this->authRealm . '_' . $this->authClientId) . '_client_auth';
         $lockCacheKeyToken = $cacheKey . '_token';
@@ -346,7 +317,7 @@ class Client
 
     public function getClientToken() : ?array
     {
-        $result = $this->readClientToken();
+        $result = $this->loadClientToken();
 
         if (!is_null($result)) {
             if ($result->fromCache) {
@@ -362,7 +333,7 @@ class Client
             }
         }
         else {
-            Log::error(__METHOD__ . ': Call readClientToken() failed');
+            Log::error(__METHOD__ . ': Call loadClientToken() failed');
         }
 
         return null;
@@ -380,12 +351,109 @@ class Client
         }
     }
 
-    public function userClientCredentialsAuth(string $username, string $password) : ?RequestResult
+    public function getDecodedAccessTokenFromRequest(Request $request) : array
+    {
+        try {
+            $header = $request->header('Authorization', '');
+
+            if (empty($header)) {
+                return ['code' => 412, 'reason' => 'Missing authorization header'];
+            }
+            else {
+                $parts = explode(' ', $header); // Bearer: <access_token>
+
+                if (count($parts) !== 2) {
+                    return ['code' => 412, 'reason' => 'Invalid authorization header'];
+                }
+                else {
+                    $result = $this->loadRealmCert($this->authRealm);
+
+                    if (is_null($result) || (!$result->fromCache && $result->rawResponse->getStatusCode() !== 200)) {
+                        return ['code' => 500, 'reason' => 'Load realm certificate failed'];
+                    }
+                    else {
+                        $jwks = $result->json;
+                    }
+
+                    return ['code' => 200, 'decoded' => JWT::decode(trim($parts[1]), JWK::parseKeySet($jwks))];
+                }
+            }
+    
+        } catch (InvalidArgumentException $e) {
+            // provided key/key-array is empty or malformed.
+            return ['code' => 422, 'reason' => 'Provided key/key-array is empty or malformed'];
+        } catch (DomainException $e) {
+            // provided algorithm is unsupported OR
+            // provided key is invalid OR
+            // unknown error thrown in openSSL or libsodium OR
+            // libsodium is required but not available.
+            return ['code' => 422, 'reason' => 'Provided algorithm is unsupported OR provided key is invalid OR SSL error'];
+        } catch (SignatureInvalidException $e) {
+            // provided JWT signature verification failed.
+            return ['code' => 401, 'reason' => 'Provided JWT signature verification failed'];
+        } catch (BeforeValidException $e) {
+            // provided JWT is trying to be used before "nbf" claim OR
+            // provided JWT is trying to be used before "iat" claim.
+            return ['code' => 422, 'reason' => 'Provided JWT is trying to be used before "nbf" claim OR provided JWT is trying to be used before "iat" claim'];
+        } catch (ExpiredException $e) {
+            // provided JWT is trying to be used after "exp" claim.
+            return ['code' => 403, 'reason' => 'Provided JWT is trying to be used after "exp" claim'];
+        } catch (UnexpectedValueException $e) {
+            // provided JWT is malformed OR
+            // provided JWT is missing an algorithm / using an unsupported algorithm OR
+            // provided JWT algorithm does not match provided key OR
+            // provided key ID in key/key-array is empty or invalid.
+            return ['code' => 422, 'reason' => 'Provided JWT is malformed OR Provided JWT is missing an algorithm / using an unsupported algorithm OR provided JWT algorithm does not match provided key OR provided key ID in key/key-array is empty or invalid'];
+        } catch(\Throwable $e) {
+            Log::error(__METHOD__ . ': ' . $e->getMessage());
+            return ['code' => 500, 'reason' => 'Internal error'];
+        }
+    }
+
+    public function getDecodedClientAccessTokenFromRequest(Request $request) : array
+    {
+        $result = $this->getDecodedAccessTokenFromRequest($request);
+
+        if ($result['code'] !== 200) {
+            return $result;
+        }
+        else {
+            $decoded = json_decode(json_encode($result['decoded']), true); // StdClass2Array
+
+            if (!array_key_exists('client_id', $decoded)) {
+                return ['code' => 412, 'reason' => 'Invalid token type (Required client token type, "client_id" not found)'];
+            }
+            else {
+                return ['code' => 200, 'decoded' => $decoded];
+            }
+        }
+    }
+
+    public function getDecodedUserAccessTokenFromRequest(Request $request) : array
+    {
+        $result = $this->getDecodedAccessTokenFromRequest($request);
+
+        if ($result['code'] !== 200) {
+            return $result;
+        }
+        else {
+            $decoded = json_decode(json_encode($result['decoded']), true); // StdClass2Array
+
+            if (array_key_exists('client_id', $decoded)) {
+                return ['code' => 412, 'reason' => 'Invalid token type (Required user token type, "client_id" found)'];
+            }
+            else {
+                return ['code' => 200, 'decoded' => $decoded];
+            }
+        }
+    }
+
+    public function doUserClientCredentialsAuth(string $username, string $password) : ?RequestResult
     {
         return $this->doClientAuth(['username' => $username, 'password' => $password, 'grant_type' => 'password', 'scope' => 'openid']);
     }
 
-    public function userAuthorizationCodeAuth(string $authorizationCode, string $redirectUri, string $sessionState) : ?RequestResult
+    public function doUserAuthorizationCodeAuth(string $authorizationCode, string $redirectUri, string $sessionState) : ?RequestResult
     {
         return $this->doClientAuth(['code' => $authorizationCode, 'redirect_uri' => $redirectUri, 'session_state' => $sessionState, 'grant_type' => 'authorization_code']);
     }
@@ -571,7 +639,7 @@ class Client
                 if (array_key_exists('refresh_token', $jsonToken)) {
                     Log::debug(__METHOD__ . ': Try refresh_token for key "' . $cacheKey . '" (before_request)');
 
-                    $result = $this->getRefreshToken($cacheKey, $jsonToken);
+                    $result = $this->loadRefreshJsonToken($cacheKey, $jsonToken);
 
                     if (!is_null($result)) {
                         if ($result->fromCache) {
@@ -591,10 +659,10 @@ class Client
                         }
                     }
                     else {
-                        Log::error(__METHOD__ . ': Call getRefreshToken() failed (before request - "' . $requestUrl . '")');
+                        Log::error(__METHOD__ . ': Call loadRefreshJsonToken() failed (before request - "' . $requestUrl . '")');
 
                         $this->cache->UNLOCK($lockCacheKeyToken);
-                        return new Response(511, [], 'Call getRefreshToken() failed (before request - "' . $requestUrl . '")');
+                        return new Response(511, [], 'Call loadRefreshJsonToken() failed (before request - "' . $requestUrl . '")');
                     }
                     
                     $this->cache->UNLOCK($lockCacheKeyToken);
@@ -656,7 +724,7 @@ class Client
                     Log::debug(__METHOD__ . ': Try refresh_token for key "' . $cacheKey . '" (after request)');
 
                     if ($tokenIsLocked) {
-                        $result = $this->getRefreshToken($cacheKey, $jsonToken);
+                        $result = $this->loadRefreshJsonToken($cacheKey, $jsonToken);
 
                         if (!is_null($result)) {
                             if ($result->fromCache) {
@@ -678,7 +746,7 @@ class Client
                             }
                         }
                         else {
-                            Log::error(__METHOD__ . ': Call getRefreshToken() failed (after request - "' . $requestUrl . '")');
+                            Log::error(__METHOD__ . ': Call loadRefreshJsonToken() failed (after request - "' . $requestUrl . '")');
 
                             $this->cache->UNLOCK($lockCacheKeyToken);
                         }
@@ -686,10 +754,10 @@ class Client
                     else {
                         $lockCacheKeyRefresh = $cacheKey . '_refresh';
 
-                        Log::debug(__METHOD__ . ': Try lock before call getRefreshToken() (token is unlocked)');
+                        Log::debug(__METHOD__ . ': Try lock before call loadRefreshJsonToken() (token is unlocked)');
 
                         if ($this->cache->LOCK($lockCacheKeyRefresh)) {
-                            $result = $this->getRefreshToken($cacheKey, $jsonToken);
+                            $result = $this->loadRefreshJsonToken($cacheKey, $jsonToken);
 
                             if (!is_null($result)) {
                                 if ($result->fromCache) {
@@ -711,13 +779,13 @@ class Client
                                 }
                             }
                             else {
-                                Log::error(__METHOD__ . ': Call getRefreshToken() failed (after request - "' . $requestUrl . '")');
+                                Log::error(__METHOD__ . ': Call loadRefreshJsonToken() failed (after request - "' . $requestUrl . '")');
 
                                 $this->cache->UNLOCK($lockCacheKeyRefresh);
                             }
                         }
                         else {
-                            Log::error(__METHOD__ . ': ClientCache::LOCK failed for getRefreshToken() ("' . $requestUrl . '")');
+                            Log::error(__METHOD__ . ': ClientCache::LOCK failed for loadRefreshJsonToken() ("' . $requestUrl . '")');
                         }
                     }
                 }
@@ -749,7 +817,7 @@ class Client
                     $lockCacheKeyRefresh = $cacheKey . '_refresh';
     
                     if ($this->cache->LOCK($lockCacheKeyRefresh)) {
-                        $result = $this->refreshUserToken($jsonToken);
+                        $result = $this->doRefreshUserToken($jsonToken);
     
                         if (!is_null($result)) {
                             if ($result->fromCache) {
@@ -773,13 +841,13 @@ class Client
                             }
                         }
                         else {
-                            Log::error(__METHOD__ . ': Call getRefreshToken() failed ("' . $requestUrl . '")');
+                            Log::error(__METHOD__ . ': Call loadRefreshJsonToken() failed ("' . $requestUrl . '")');
     
                             $this->cache->UNLOCK($lockCacheKeyRefresh);
                         }
                     }
                     else {
-                        Log::error(__METHOD__ . ': ClientCache::LOCK failed for getRefreshToken() ("' . $requestUrl . '")');
+                        Log::error(__METHOD__ . ': ClientCache::LOCK failed for loadRefreshJsonToken() ("' . $requestUrl . '")');
                     }
                 }
                 else {
@@ -793,8 +861,10 @@ class Client
 
     public function doRequestWithAccessToken(string $accessToken, string $method, string $requestUrl, array $options = []) : \Psr\Http\Message\ResponseInterface
     {
-        $options['headers']['authorization'] = 'Bearer ' . $accessToken;
+        $authHeader = ['headers' => ['authorization' => 'Bearer ' . $accessToken]];
 
+        $options = array_merge_recursive_distinct($options, $authHeader);
+        
         return $this->doHttp2Request($method, $requestUrl, $options);
     }
 
@@ -805,12 +875,12 @@ class Client
         return ($decoded['exp'] - time()) <= 0;
     }
 
-    public function refreshUserToken(array $jsonToken) : ?RequestResult
+    public function doRefreshUserToken(array $jsonToken) : ?RequestResult
     {
-        return $this->getRefreshToken(null, $jsonToken);
+        return $this->loadRefreshJsonToken(null, $jsonToken);
     }
 
-    public function proxyKeyCloakAdminRequest(Request $request, array $options = []) : \Psr\Http\Message\ResponseInterface
+    public function doForwardToKeyCloakAdmin(Request $request, array $options = []) : \Psr\Http\Message\ResponseInterface
     {
         $idpUri = $request->header('X-Idp-Uri');
 
@@ -823,24 +893,23 @@ class Client
             throw new \Exception(__METHOD__ . ': Invalid IdpUri for realm "' . $this->authRealm . '" (IdpUri = "' . substr($idpUri, 0, 20) . '..."');
         }
         else {
-            $accessToken = $this->getAccessTokenFromRequest($request);
-
-            if (!is_null($accessToken)) {
+            if (!is_null($this->getAccessTokenFromRequest($request))) {
                 $baseOptions = [
                     'base_uri' => $this->keycloakLoginHostname,
                     'query' => $request->query(),
                     'body' => $request->getContent(false),
+                    'headers' => $request->header()
                 ];
 
-                $baseOptions['headers'] = $request->header();
-
-                if ($request->hasHeader('authorization')) {
-                    unset($baseOptions['headers']['authorization']);
+                foreach (['host'] as $headerName) {
+                    if (isset($baseOptions['headers'][$headerName])) {
+                        unset($baseOptions['headers'][$headerName]);
+                    }
                 }
 
-                $options = array_merge($baseOptions, $options);
+                $options = array_merge_recursive_distinct($baseOptions, $options);
 
-                return $this->doRequestWithAccessToken($accessToken, $request->method(), $idpUri, $options);
+                return $this->doHttp2Request($request->method(), $idpUri, $options);
             }
             else {
                 throw new \Exception(__METHOD__ . ': access_token not found into request for idp-uri"' . $idpUri . '"');
@@ -1178,6 +1247,41 @@ class Client
 
     // ---
 
+    private function loadOpenIdConfiguration(string $realm) : bool
+    {
+        $cacheKey = 'kc_' . strtolower($realm) . '_openid_conf';
+
+        if($this->cache->EXISTS($cacheKey)) {
+            $data = $this->cache->GET($cacheKey);
+
+            if (!is_null($data)) {
+                $this->openIdConfigurations[$realm] = json_decode($data, true);
+                return true;
+            }
+            else {
+                Log::error(__METHOD__ . ': Read from cache "' . $cacheKey . '" failed');
+
+                $response = $this->doHttp2Request('GET', $this->keycloakLoginHostname . '/realms/' . $realm . '/.well-known/openid-configuration');
+
+                if ($response->getStatusCode() === 200) {
+                    $this->openIdConfigurations[$realm] = json_decode((string) $response->getBody(), true);
+                    return true;
+                }
+            }
+        }
+        else {
+            $response = $this->doHttp2Request('GET', $this->keycloakLoginHostname . '/realms/' . $realm . '/.well-known/openid-configuration');
+
+            if ($response->getStatusCode() === 200) {
+                $this->cache->SET($cacheKey, (string) $response->getBody(), 36000);
+                $this->openIdConfigurations[$realm] = json_decode((string) $response->getBody(), true);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private function loadClientJsonToken(string $cacheKey) : ?RequestResult
     {
         Log::debug(__METHOD__ . ': Requested token "' . $cacheKey . '"');
@@ -1233,7 +1337,7 @@ class Client
         return $authResponse;
     }
 
-    private function getRefreshToken(?string $cacheKey, array $oldJsonToken) : ?RequestResult
+    private function loadRefreshJsonToken(?string $cacheKey, array $oldJsonToken) : ?RequestResult
     {
         Log::debug(__METHOD__ . ': Requested refresh token "' . $cacheKey . '"', self::decodeAccessToken($oldJsonToken['access_token']));
 

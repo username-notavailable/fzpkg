@@ -38,56 +38,43 @@ use Illuminate\Support\Facades\Auth;
 use Fuzzy\Fzpkg\Classes\Clients\KeyCloak\Client;
 use Illuminate\View\FileViewFinder;
 use Illuminate\Filesystem\Filesystem;
+use Fuzzy\Fzpkg\Classes\SweetApi\Classes\HtmxRequest;
+use Fuzzy\Fzpkg\Classes\Clients\KeyCloak\Classes\ClientCache\CacheInterface;
+use Fuzzy\Fzpkg\Classes\Clients\KeyCloak\Classes\ClientCache\{RedisCache, MemcachedCache};
 
 final class FzpkgServiceProvider extends ServiceProvider
 {
     public function register()
     {
-        $filesystem = new Filesystem();
-
-        if ($filesystem->missing(config_path('fz.php'))) {
+        if ((new Filesystem())->missing(config_path('fz.php'))) {
             $this->mergeConfigFrom(
                 __DIR__.'/../config/fz.php', 'fz'
             );
         }
+
+        $this->app->bind(CacheInterface::class, function() {
+            if (config('fz..default.keycloak.clientCacheType') === 'redis') {
+                return new RedisCache();
+            }
+            else {
+                return new MemcachedCache();
+            }
+        });
+
+        $this->app->bind(HtmxRequest::class, function() {
+            return HtmxRequest::createFrom(request());
+        });
+
+        $this->app->bind(Client::class, function() {
+            return new Client($this->app->make(CacheInterface::class), $this->app->make(GlobalClientIdx::class)->get());
+        });
 
         $this->app->singleton(GuzzleClientHandlers::class, function() {
             return new GuzzleClientHandlers();
         });
 
         $this->app->scoped(GlobalClientIdx::class, function() {
-            return new GlobalClientIdx();
-        });
-
-        $this->app->singleton('__fzKcClientCacheRedisConnection', function() {
-            $redis = new \Redis(config('fz.keycloak.client.cache.redis.init'));
-
-            $redis->setOption(\Redis::OPT_PREFIX, config('fz.keycloak.client.cache.redis.prefix'));	
-
-            foreach (config('fz.keycloak.client.cache.redis.options') as $optionName => $optionValue) {
-                $redis->setOption($optionName, $optionValue);
-            }
-
-            return $redis;
-        });
-
-        $this->app->singleton('__fzKcClientCacheMemcachedConnection', function() {
-            $memcached = new \Memcached(config('fz.keycloak.client.cache.memcached.init.persistent'));
-
-            foreach (config('fz.keycloak.client.cache.memcached.options') as $optionName => $optionValue) {
-                $memcached->setOption(constant('\Memcached::'. $optionName), $optionValue);
-            }
-
-            $username = config('fz.keycloak.client.cache.memcached.init.auth')[0];
-            $password = config('fz.keycloak.client.cache.memcached.init.auth')[1];
-
-            if (!empty($username) && !empty($password)) {
-                $memcached->setSaslAuthData($username, $password);
-            }
-            
-            $memcached->addServers(config('fz.keycloak.client.cache.memcached.servers'));
-
-            return $memcached;
+            return new GlobalClientIdx(config('fz.default.keycloak.clientIdx'));
         });
     }
 
@@ -108,11 +95,11 @@ final class FzpkgServiceProvider extends ServiceProvider
         }
 
         /*Auth::provider('KcTokenProvider',function ($app,array $config) { 
-            return new KcTokenProvider(Client::create());
+            return new KcTokenProvider($app->make(Client::class));
         });*/
 
         Auth::extend('KcGuard', function ($app, $name, array $config) {
-            return new KcGuard(Client::create());
+            return new KcGuard($app->make(Client::class));
         });
 
         Authenticate::redirectUsing(function($request) {

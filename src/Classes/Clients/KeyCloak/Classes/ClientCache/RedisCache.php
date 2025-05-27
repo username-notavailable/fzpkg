@@ -12,7 +12,13 @@ class RedisCache implements CacheInterface
 
     public function __construct()
     {
-        $this->connection = app('__fzKcClientCacheRedisConnection');
+        $this->connection = new \Redis(config('fz.keycloak.client.cache.redis.init'));
+
+        $this->connection->setOption(\Redis::OPT_PREFIX, config('fz.keycloak.client.cache.redis.prefix'));	
+
+        foreach (config('fz.keycloak.client.cache.redis.options') as $optionName => $optionValue) {
+            $this->connection->setOption($optionName, $optionValue);
+        }
     }
 
     public function SET(string $key, string $value, int $expirationSeconds) : bool

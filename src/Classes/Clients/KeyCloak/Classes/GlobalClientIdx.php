@@ -10,14 +10,14 @@ class GlobalClientIdx
 {
     protected $name;
 
-    public function __construct()
+    public function __construct(string $defaultClientIdx)
     {
-        $this->name = null;
+        $this->name = $defaultClientIdx;
     }
 
     public function get() : string
     {
-        if (is_null($this->name)) {
+        if (empty($this->name)) {
             Log::debug(__METHOD__ . ': Selected clientIdx is null, returned "' . config('fz.default.keycloak.clientIdx') . '"');
             return config('fz.default.keycloak.clientIdx');
         }

@@ -12,7 +12,22 @@ class MemcachedCache implements CacheInterface
 
     public function __construct()
     {
-        $this->connection = app('__fzKcClientCacheMemcachedConnection');
+        $this->connection = new \Memcached(config('fz.keycloak.client.cache.memcached.init.persistent'));
+
+        foreach (config('fz.keycloak.client.cache.memcached.options') as $optionName => $optionValue) {
+            $this->connection->setOption(constant('\Memcached::'. $optionName), $optionValue);
+        }
+
+        $username = config('fz.keycloak.client.cache.memcached.init.auth')[0];
+        $password = config('fz.keycloak.client.cache.memcached.init.auth')[1];
+
+        if (!empty($username) && !empty($password)) {
+            $this->connection->setSaslAuthData($username, $password);
+        }
+        
+        $this->connection->addServers(config('fz.keycloak.client.cache.memcached.servers'));
+
+        return $this->connection;
     }
 
     public function SET(string $key, string $value, int $expirationSeconds) : bool

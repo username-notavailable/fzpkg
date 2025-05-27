@@ -5,19 +5,24 @@ namespace Fuzzy\Fzpkg\Classes\Clients\KeyCloak\Classes\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
-use Fuzzy\Fzpkg\Classes\Clients\KeyCloak\Classes\AccessTokenRequestTrait;
-
+use Fuzzy\Fzpkg\Classes\Clients\KeyCloak\Client;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class CheckUserBearerTokenType
 {
-    use AccessTokenRequestTrait;
+    protected $kcClient;
+
+    public function __construct(Client $kcClient) 
+    {
+        $this->kcClient = $kcClient;
+    }
 
     public function handle(Request $request, Closure $next): Response
     {
-        $result = $this->readUserAccessToken($request);
+        $result = $this->kcClient->getDecodedUserAccessTokenFromRequest($request);
 
         if ($result['code'] !== 200) {
-            return response($result['reason'], $result['code']);
+            throw new HttpException($result['code'], $result['reason']);
         }
         else {
             return $next($request);

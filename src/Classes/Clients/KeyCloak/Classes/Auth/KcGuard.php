@@ -22,7 +22,7 @@ class KcGuard implements Guard
             return true;
         }
 
-        $result = $this->kcClient->userClientCredentialsAuth($credentials['email'], $credentials['password']);
+        $result = $this->kcClient->doUserClientCredentialsAuth($credentials['email'], $credentials['password']);
 
         if (!is_null($result)) {
             if ($result->rawResponse->getStatusCode() === 200) {
@@ -40,7 +40,7 @@ class KcGuard implements Guard
             return true;
         }
 
-        $result = $this->kcClient->userAuthorizationCodeAuth($authorizationCode, $redirectUri, $sessionState);
+        $result = $this->kcClient->doUserAuthorizationCodeAuth($authorizationCode, $redirectUri, $sessionState);
 
         if (!is_null($result)) {
             if ($result->rawResponse->getStatusCode() === 200) {

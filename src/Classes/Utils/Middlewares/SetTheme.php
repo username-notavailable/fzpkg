@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Fuzzy\Fzpkg\FzpkgServiceProvider;
+use Illuminate\Support\Facades\Log;
 
 class SetTheme
 {
@@ -38,27 +39,50 @@ class SetTheme
             FzpkgServiceProvider::elaborateSetThemeFromCookie();
         }
 
-        if (view()->exists('errors.' . $e->getStatusCode())) {
-            $view = 'errors.' . $e->getStatusCode();
-        }
-        else if ($e->getStatusCode() >= 400 && $e->getStatusCode() <= 499 && view()->exists('errors.4XX')) {
-            $view = 'errors.4XX';
-        }
-        else if ($e->getStatusCode() >= 500 && $e->getStatusCode() <= 599 && view()->exists('errors.5XX')) {
-            $view = 'errors.5XX';
-        }
+        $responseType = $request->prefers(['text/html', 'application/json']);
 
-        if (isset($view)) {
-            return response()->view($view, [], $e->getStatusCode());
-        }
-        else {
-            if (view()->exists('errors.generic')) {
-                $lead = __('Errore :code', ['code' => $e->getStatusCode()]);
-                
-                return response()->view('errors.generic', ['lead' => $lead, 'exception' => $e], $e->getStatusCode());
+        if ($responseType === 'text/html') {
+            if (view()->exists('errors.' . $e->getStatusCode())) {
+                $view = 'errors.' . $e->getStatusCode();
+            }
+            else if ($e->getStatusCode() >= 400 && $e->getStatusCode() <= 499 && view()->exists('errors.4XX')) {
+                $view = 'errors.4XX';
+            }
+            else if ($e->getStatusCode() >= 500 && $e->getStatusCode() <= 599 && view()->exists('errors.5XX')) {
+                $view = 'errors.5XX';
             }
 
-            return null;
+            if (isset($view)) {
+                return response()->view($view, [], $e->getStatusCode());
+            }
+            else {
+                if (view()->exists('errors.generic')) {
+                    $lead = __('Errore :code', ['code' => $e->getStatusCode()]);
+                    
+                    return response()->view('errors.generic', ['lead' => $lead, 'exception' => $e], $e->getStatusCode());
+                }
+                else {
+                    Log::debug(__METHOD__ . ': view "errors.generic" not found', ['exception' => $e]);
+                    return response('', $e->getStatusCode());
+                }
+            }
+        }
+        else if ($responseType === 'application/json') {
+            $responseBody = '';
+
+            if (config('app.debug')) {
+                $responseBody = ['message' => $e->getMessage()];
+            }
+
+            return response()->json(
+                data: $responseBody,
+                status: 500,
+                headers: [],
+                options: JSON_UNESCAPED_UNICODE
+            );
+        }
+        else {
+            return response(config('app.debug') ? $e->getMessage() : '', $e->getStatusCode());
         }
     }
 
@@ -72,12 +96,35 @@ class SetTheme
             FzpkgServiceProvider::elaborateSetThemeFromCookie();
         }
 
-        if (view()->exists('errors.generic')) {
-            $lead = __('Errore :code', ['code' => 500]);
-            
-            return response()->view('errors.generic', ['lead' => $lead, 'exception' => $e], 500);
-        }
+        $responseType = $request->prefers(['text/html', 'application/json']);
 
-        return null;
+        if ($responseType === 'text/html') {
+            if (view()->exists('errors.generic')) {
+                $lead = __('Errore :code', ['code' => 500]);
+                
+                return response()->view('errors.generic', ['lead' => $lead, 'exception' => $e], 500);
+            }
+            else {
+                Log::debug(__METHOD__ . ': view "errors.generic" not found', ['exception' => $e]);
+                return response('', 500);
+            }
+        }
+        else if ($responseType === 'application/json') {
+            $responseBody = '';
+
+            if (config('app.debug')) {
+                $responseBody = ['message' => $e->getMessage()];
+            }
+
+            return response()->json(
+                data: $responseBody,
+                status: 500,
+                headers: [],
+                options: JSON_UNESCAPED_UNICODE
+            );
+        }
+        else {
+            return response(config('app.debug') ? $e->getMessage() : '', 500);
+        }
     }
 }
