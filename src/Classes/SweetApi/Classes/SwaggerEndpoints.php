@@ -309,8 +309,7 @@ class SwaggerEndpoints
                             $pData = array_merge($methodData['routeSchemaParams'], [
                                 'tags' => $methodData['routeTags'],
                                 'operationId' => $methodData['routeName'] . '_###_' . $verb,
-                                'responses' => $methodData['routeResponses'],
-                                'x-endpoints' => $controllerData['controller'] . '::' . $methodData['methodName']
+                                'responses' => $methodData['routeResponses']
                             ]);
 
                             if (count($verbs) === 1) {

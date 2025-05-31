@@ -1,0 +1,20 @@
+<?php
+
+namespace App\Http\Actions;
+
+use App\DTOs\ActionResult;
+use App\DTOs\Enums\ActionResultStatus;
+use Spatie\LaravelData\Dto;
+
+class {{ class }} extends ApiActionAbstract
+{
+    public function handle(?Dto $dto = null) : ActionResult
+    {
+        return ActionResult::from(['status' => ActionResultStatus::ERROR, 'httpCode' => 501, 'humanErrorMessage' => __('Metodo non implementato')]);
+    }
+
+    public function getRequestedDtoClass() : ?string
+    {
+        return {{ dto }};
+    }
+}
