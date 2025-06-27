@@ -41,6 +41,10 @@ final class RunScrapersCommand extends BaseCommand
         }
         else {
             if (count($classes) > 0) {
+
+                umask(0);
+                ini_set('memory_limit', '-1');
+
                 $this->newLine();
                 $this->outInfo('>>> Start scraping... <<<');  
                 $this->newLine();  

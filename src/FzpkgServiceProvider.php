@@ -154,13 +154,13 @@ final class FzpkgServiceProvider extends ServiceProvider
                 require_once __DIR__ . DIRECTORY_SEPARATOR . 'functions_blade.php';
             }
 
-            if (config('fz.load.functions.helpers')) {
-                require_once __DIR__ . DIRECTORY_SEPARATOR . 'functions_helpers.php';
-            }
-
             if (config('fz.load.routes')) {
                 $this->loadRoutesFrom(__DIR__.'/routes.php');
             }
+        }
+
+        if (config('fz.load.functions.helpers')) {
+            require_once __DIR__ . DIRECTORY_SEPARATOR . 'functions_helpers.php';
         }
     }
 

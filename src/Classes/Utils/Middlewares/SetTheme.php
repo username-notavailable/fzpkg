@@ -68,10 +68,10 @@ class SetTheme
             }
         }
         else if ($responseType === 'application/json') {
-            $responseBody = '';
+            $responseBody = ['status' => 'error', 'message' => 'Exception error'];
 
             if (config('app.debug')) {
-                $responseBody = ['message' => $e->getMessage()];
+                $responseBody['message'] = $e->getMessage();
             }
 
             return response()->json(
